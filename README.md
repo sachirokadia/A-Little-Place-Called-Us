@@ -175,3 +175,9 @@ supabase/migrations/0001_init.sql  Schema, RLS, sealed view, storage policies, i
   PWA install, voice recording on iOS Safari (microphone permission behaviour varies),
   and screen-reader pass beyond labelled controls/focus rings. Run those before calling
   the synced version production-ready for the two of you.
+
+## Live
+
+- Site: https://a-little-place-called-us-sachirokadia23-3354s-projects.vercel.app
+- Vercel project: `a-little-place-called-us` (prj_5KOVZf2rilHxazfLcT5Bx1cMfr3W), deployed from `main` via GitHub, SSO protection disabled for public access.
+- Note: the live build has no `VITE_API_URL` set, so it runs in labelled demo mode (per-device localStorage) until a hosted PostgreSQL `DATABASE_URL` + API host are configured and the frontend is redeployed with `VITE_API_URL`. See "PostgreSQL backend" above for the shared-sync setup.
