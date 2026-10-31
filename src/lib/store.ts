@@ -136,6 +136,13 @@ export class PlaceStore {
       isFavorite: (input as { isFavorite?: boolean }).isFavorite ?? false,
     } as unknown as T;
     if (this.mode === 'supabase' && supabase) {
+      // Never let a stale/demo viewer id reach the database: author identity
+      // always comes from the live auth session in Supabase mode.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sign in first.');
+      this.viewerId = user.id;
+      (item as AnyItem).authorId = user.id;
+      (item as AnyItem).spaceId = this.data.space.id;
       await this.supabaseInsert(collection, item as AnyItem);
     }
     (this.data[collection] as AnyItem[]).unshift(item as AnyItem);
@@ -240,6 +247,9 @@ export class PlaceStore {
     if (!supabase) return false;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
+    // Resolve identity up front: even if the space load below fails, no later
+    // create can fall back to the demo viewer id ('demo-you', not a UUID).
+    this.viewerId = user.id;
     const { data: memberships } = await supabase.from('space_members').select('space_id, spaces(id, name, invite_code, created_at)').eq('user_id', user.id).limit(1);
     const membership = (memberships as { space_id: string; spaces: { id: string; name: string; invite_code: string; created_at: string } }[] | null)?.[0];
     if (!membership) return false;
@@ -258,10 +268,14 @@ export class PlaceStore {
     let letterRows: Record<string, unknown>[] = [];
     const { data: viewRows, error: viewErr } = await supabase.from('letters_visible').select('*').eq('space_id', space.id).order('created_at', { ascending: false });
     letterRows = viewErr ? await fetchTable('letters') : ((viewRows as Record<string, unknown>[]) || []);
-    const [remRows, memRows, jourRows, appRows, planRows, voiceRows, memberRows] = await Promise.all([
+    const [remRows, memRows, jourRows, appRows, planRows, voiceRows, memberRes] = await Promise.all([
       fetchTable('reminders'), fetchTable('memories'), fetchTable('journal_entries'), fetchTable('appreciations'), fetchTable('future_plans'), fetchTable('voice_notes'),
       supabase.from('space_members').select('user_id').eq('space_id', space.id),
     ]);
+    // NOTE: the query above returns a { data, error } response object, not an
+    // array — mapping the response itself threw "(E || []).map is not a function"
+    // and left the whole load (and the viewer id) on demo data.
+    const memberRows = (memberRes.data || []) as { user_id: string }[];
     const signed = async (path: string | null) => {
       if (!path) return null;
       const { data } = await supabase!.storage.from('private-media').createSignedUrl(path, 60 * 60);
@@ -275,7 +289,7 @@ export class PlaceStore {
     for (const r of voiceRows) voiceNotes.push({ ...mapBase(r), title: String(r.title), durationSec: r.duration_sec ? Number(r.duration_sec) : null, mediaPath: r.media_path ? String(r.media_path) : null, mediaUrl: await signed(r.media_path ? String(r.media_path) : null), room: (r.room as VoiceNoteMeta['room']) || 'quiet', linkedId: r.linked_id ? String(r.linked_id) : null });
     this.data = {
       space,
-      members: (((memberRows as unknown) as { user_id: string }[] | null) || []).map((m) => ({ id: m.user_id, displayName: m.user_id === user.id ? 'You' : 'Partner', shortName: m.user_id === user.id ? 'You' : 'Partner' })),
+      members: memberRows.map((m) => ({ id: m.user_id, displayName: m.user_id === user.id ? 'You' : 'Partner', shortName: m.user_id === user.id ? 'You' : 'Partner' })),
       reminders: remRows.map((r) => ({ ...mapBase(r), text: String(r.text), kind: r.kind as Reminder['kind'] })),
       memories,
       letters: letterRows.map((r) => ({ ...mapBase(r), title: String(r.title), body: String(r.body || ''), visibility: r.visibility as Letter['visibility'], revealAt: r.reveal_at ? String(r.reveal_at) : null })),
@@ -293,12 +307,14 @@ export class PlaceStore {
     if (!supabase) throw new Error('Supabase is not configured.');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Sign in first.');
+    this.viewerId = user.id;
     const space: Space = { id: uid(), name: name.trim(), inviteCode: makeInviteCode(), createdAt: nowIso() };
     const { error } = await supabase.from('spaces').insert({ id: space.id, name: space.name, invite_code: space.inviteCode, created_by: user.id });
     if (error) throw new Error(error.message);
     const { error: mErr } = await supabase.from('space_members').insert({ space_id: space.id, user_id: user.id, role: 'owner' });
     if (mErr) throw new Error(mErr.message);
     this.data.space = space;
+    this.data.members = [{ id: user.id, displayName: 'You', shortName: 'You' }];
     return space;
   }
 
@@ -307,10 +323,16 @@ export class PlaceStore {
     if (!supabase) throw new Error('Supabase is not configured.');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Sign in first.');
-    const { data, error } = await supabase.from('spaces').select('*').eq('invite_code', inviteCode.trim().toUpperCase()).single();
-    if (error || !data) throw new Error('No space was found with that invite code.');
-    const { error: mErr } = await supabase.from('space_members').insert({ space_id: data.id, user_id: user.id, role: 'member' });
-    if (mErr) throw new Error('That space may already have two members, or you are already in it.');
+    this.viewerId = user.id;
+    // Joining must go through the join_space_by_code RPC (migration 0002):
+    // a non-member cannot SELECT the space row under RLS, so a direct lookup
+    // by invite code always fails for the joiner. The RPC (security definer)
+    // looks the code up, enforces the two-member cap, and inserts the member.
+    const { data: joinedId, error: rpcErr } = await supabase.rpc('join_space_by_code', { p_code: inviteCode.trim().toUpperCase() });
+    if (rpcErr || !joinedId) throw new Error(rpcErr?.message || 'No space was found with that invite code.');
+    // Now a member, the space row is visible under RLS.
+    const { data, error } = await supabase.from('spaces').select('*').eq('id', joinedId).single();
+    if (error || !data) throw new Error('Joined, but the space could not be loaded. Please reload.');
     const space: Space = { id: data.id, name: data.name, inviteCode: data.invite_code, createdAt: data.created_at };
     this.data.space = space;
     return space;

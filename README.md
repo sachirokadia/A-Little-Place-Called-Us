@@ -83,7 +83,7 @@ literally "You" and "Partner").
 
 1. Create a project at supabase.com. In **Authentication**, enable Email sign-in.
    (Email confirmation behaviour is your project setting; the sign-up form tells the user to check email if it is on.)
-2. In the **SQL editor**, run `supabase/migrations/0001_init.sql` in full. It creates:
+2. In the **SQL editor**, run `supabase/migrations/0001_init.sql` in full, then `supabase/migrations/0002_join_by_code.sql` (required: joining by invite code goes through the `join_space_by_code` RPC, because a non-member cannot SELECT a space row under RLS). It creates:
    - `spaces`, `space_members` (two-member cap enforced by a trigger, not just UI)
    - `reminders`, `memories`, `letters`, `journal_entries`, `appreciations`, `future_plans`, `voice_notes`
    - RLS on every table (see Privacy model below)

@@ -121,6 +121,7 @@ export default function App() {
           <Field label="Password"><input type="password" required minLength={8} value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} className={inputCls} autoComplete="current-password" /></Field>
           <Button type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</Button>
           <Button variant="quiet" disabled={loading} onClick={async () => {
+            if (!authForm.email.trim() || authForm.password.length < 8) { notify('Enter an email and a password (at least 8 characters) first.', 'error'); return; }
             setLoading(true);
             try { await apiRegister(authForm.email, authForm.password, authForm.email.split('@')[0]); setAuthState('signed-in'); notify('Account created. Now create or join a space.'); }
             catch (err) { notify(err instanceof Error ? err.message : 'Could not create an account.', 'error'); }
@@ -156,6 +157,7 @@ export default function App() {
           <Button type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</Button>
           <Button variant="quiet" disabled={loading} onClick={async () => {
             if (!supabase) return;
+            if (!authForm.email.trim() || authForm.password.length < 8) { notify('Enter an email and a password (at least 8 characters) first.', 'error'); return; }
             setLoading(true);
             const { error } = await supabase.auth.signUp({ email: authForm.email, password: authForm.password });
             setLoading(false);
