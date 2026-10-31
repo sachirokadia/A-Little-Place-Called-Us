@@ -141,7 +141,9 @@ export class PlaceStore {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sign in first.');
       this.viewerId = user.id;
+      this.viewerName = (user.email || '').split('@')[0] || 'You';
       (item as AnyItem).authorId = user.id;
+      (item as AnyItem).authorName = this.viewerName;
       (item as AnyItem).spaceId = this.data.space.id;
       await this.supabaseInsert(collection, item as AnyItem);
     }
@@ -269,7 +271,10 @@ export class PlaceStore {
     if (!user) return false;
     // Resolve identity up front: even if the space load below fails, no later
     // create can fall back to the demo viewer id ('demo-you', not a UUID).
+    // Display name comes from the sign-in email, so shared items are never
+    // all labelled 'You' to the partner (the sealed-letter byline bug).
     this.viewerId = user.id;
+    this.viewerName = (user.email || '').split('@')[0] || 'You';
     const { data: memberships } = await supabase.from('space_members').select('space_id, spaces(id, name, invite_code, created_at)').eq('user_id', user.id).limit(1);
     const membership = (memberships as { space_id: string; spaces: { id: string; name: string; invite_code: string; created_at: string } }[] | null)?.[0];
     if (!membership) return false;
@@ -328,6 +333,7 @@ export class PlaceStore {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Sign in first.');
     this.viewerId = user.id;
+    this.viewerName = (user.email || '').split('@')[0] || 'You';
     const space: Space = { id: uid(), name: name.trim(), inviteCode: makeInviteCode(), createdAt: nowIso() };
     const { error } = await supabase.from('spaces').insert({ id: space.id, name: space.name, invite_code: space.inviteCode, created_by: user.id });
     if (error) throw new Error(error.message);
@@ -344,6 +350,7 @@ export class PlaceStore {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Sign in first.');
     this.viewerId = user.id;
+    this.viewerName = (user.email || '').split('@')[0] || 'You';
     // Joining must go through the join_space_by_code RPC (migration 0002):
     // a non-member cannot SELECT the space row under RLS, so a direct lookup
     // by invite code always fails for the joiner. The RPC (security definer)
