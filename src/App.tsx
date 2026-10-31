@@ -76,8 +76,10 @@ export default function App() {
     if (apiConfigured) {
       setLoading(true);
       store.loadFromApi().then((ok) => {
-        if (!ok) setLoadError('You are signed in, but you are not in a space yet. Create one below, or join with an invite code.');
-        else setLoadError(null);
+        if (!ok) {
+          setLoadError('You are signed in, but you are not in a space yet. Create one below, or join with an invite code.');
+          store.clearToEmpty(); // never show demo samples to a signed-in user
+        } else setLoadError(null);
         refresh();
       }).catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not load your space.')).finally(() => setLoading(false));
       return;
@@ -85,8 +87,10 @@ export default function App() {
     if (!supabaseConfigured) return;
     setLoading(true);
     store.loadFromSupabase().then((ok) => {
-      if (!ok) setLoadError('You are signed in, but you are not in a space yet. Create one below, or join with an invite code.');
-      else setLoadError(null);
+      if (!ok) {
+        setLoadError('You are signed in, but you are not in a space yet. Create one below, or join with an invite code.');
+        store.clearToEmpty(); // never show demo samples to a signed-in user
+      } else setLoadError(null);
       refresh();
     }).catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not load your space.')).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

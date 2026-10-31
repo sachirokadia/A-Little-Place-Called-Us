@@ -207,6 +207,26 @@ export class PlaceStore {
     if (item) await this.update(collection, id, { isFavorite: !item.isFavorite });
   }
 
+  /**
+   * Signed-in but space-less: drop the demo sample content so a real user
+   * never sees sample memories/letters as if they were their own data.
+   * Demo mode never calls this (it has no sign-in and no space setup).
+   */
+  clearToEmpty(): void {
+    this.data = {
+      space: { id: '', name: '', inviteCode: '', createdAt: '' },
+      members: [],
+      reminders: [],
+      memories: [],
+      letters: [],
+      journals: [],
+      appreciations: [],
+      plans: [],
+      voiceNotes: [],
+    };
+    this.version++;
+  }
+
   // ---------- PostgreSQL API loading ----------
   async loadFromApi(): Promise<boolean> {
     const data = await apiFetch('/api/data') as PlaceData & { viewer: { id: string; displayName: string } };
