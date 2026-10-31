@@ -56,22 +56,32 @@ export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (
 
   return (
     <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative mx-auto w-full max-w-5xl px-4 pb-32 pt-6 sm:px-6">
-      {/* Journal cover */}
-      <section className="paper-card relative rounded-[28px] px-4 pb-8 pt-8 text-center sm:pt-10">
-        <Washi tone="rose" />
-        <div className="flex justify-center"><AvatarPair names={partnerNames} /></div>
-        <p className="font-hand mt-4 text-4xl leading-tight text-plum sm:text-5xl">welcome to our little place</p>
-        <h1 className="font-serif-display mt-1 text-2xl leading-tight text-cocoa sm:text-3xl">A Little Place Called Us</h1>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-cocoa-soft sm:text-base">
-          Open this journal whenever you like. No streaks, no pressure — just the memories,
-          letters, and plans you choose to keep here, together.
-        </p>
-        <div className="float-soft mt-5"><Cottage /></div>
-        <p className="font-hand mt-2 text-xl text-cocoa-soft">our cottage, kept in a journal</p>
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
-          <button onClick={onRandomReminder} className="min-h-11 rounded-full bg-cocoa px-5 py-2 text-sm font-bold text-cream hover:bg-plum">A little reminder for today</button>
-          <button onClick={() => go('memories')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">＋ Add a memory</button>
-          <button onClick={() => go('letters')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">✎ Write a letter</button>
+      {/* Reference scene: the supplied night-cottage photograph, presented as a
+          scrapbook plate. The cream paper card below carries the exact brand copy,
+          so text stays readable against the night scene. */}
+      <section aria-label="A Little Place Called Us">
+        <div className="relative overflow-hidden rounded-[28px] border border-cocoa/15 shadow-[0_18px_36px_rgba(81,68,61,0.18)]">
+          <img
+            src="/night-cottage.jpg"
+            alt="A stone cottage at night, its windows glowing warm, beneath a moonlit garden of ferns, hostas and jasmine"
+            className="block aspect-[4/3] w-full object-cover object-[62%_50%] sm:aspect-[21/9] sm:object-[50%_30%]"
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/30 to-transparent" aria-hidden="true" />
+        </div>
+        <div className="paper-card relative z-10 mx-3 -mt-16 rounded-[28px] px-5 pb-8 pt-8 text-center shadow-[0_14px_30px_rgba(81,68,61,0.16)] sm:mx-8 sm:-mt-20 sm:pt-10">
+          <Washi tone="rose" />
+          <div className="flex justify-center"><AvatarPair names={partnerNames} /></div>
+          <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.28em] text-plum">YOUR SHARED DIGITAL HOME</p>
+          <h1 className="font-serif-display mx-auto mt-3 max-w-2xl text-5xl leading-[1.05] text-cocoa sm:text-6xl">A Little Place Called Us.</h1>
+          <p className="font-serif-display mt-4 text-xl leading-relaxed text-plum sm:text-2xl">Made with love. Filled by both of us.</p>
+          <p className="mx-auto mt-4 max-w-lg text-sm leading-relaxed text-cocoa-soft sm:text-base">
+            A place for the things we want to remember, the things we don't always know how to say, and the future we're still imagining.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <button onClick={onRandomReminder} className="min-h-11 rounded-full bg-cocoa px-5 py-2 text-sm font-bold text-cream hover:bg-plum">A little reminder for today</button>
+            <button onClick={() => go('memories')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">＋ Add a memory</button>
+            <button onClick={() => go('letters')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">✎ Write a letter</button>
+          </div>
         </div>
       </section>
 
