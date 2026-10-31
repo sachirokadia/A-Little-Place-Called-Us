@@ -1,0 +1,120 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Cozy pastel scrapbook palette (from the redesign brief) */
+  --color-cream: #f8f1e7;
+  --color-cream-deep: #f1e6d3;
+  --color-sage: #e3ebdd;
+  --color-sage-deep: #c9d8bd;
+  --color-rose: #f4dfe3;
+  --color-rose-deep: #e7c3cb;
+  --color-butter: #f8edc9;
+  --color-butter-deep: #eedda0;
+  --color-powder: #dfeaf3;
+  --color-powder-deep: #c2d6e6;
+  --color-lilac: #eae1f1;
+  --color-lilac-deep: #d5c6e4;
+  --color-cocoa: #51443d;
+  --color-cocoa-soft: #6e5e54;
+  --color-plum: #6b5563;
+  --color-paper: #fffdf8;
+
+  /* Compatibility remap: existing components use night/ivory/gold names.
+     They now resolve to the pastel world, so rooms restyle without logic changes. */
+  --color-night-950: #efe4d0;
+  --color-night-900: #f8f1e7;
+  --color-night-800: #fffdf8;
+  --color-night-700: #f8edc9;
+  --color-blue-muted: #7d8a6e;
+  --color-blue-soft: #8a7d8a;
+  --color-gold: #8a6d4b;
+  --color-gold-soft: #6b5563;
+  --color-ivory: #51443d;
+  --color-ivory-dim: #6e5e54;
+
+  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-sans: "Nunito", ui-sans-system, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-hand: "Caveat", cursive;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  background: #f8f1e7;
+  color: #51443d;
+  font-family: var(--font-sans);
+  /* Subtle paper grain, via layered radial dots — no image asset, no heavy texture. */
+  background-image: radial-gradient(rgba(81, 68, 61, 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+::selection { background: #f8edc9; color: #51443d; }
+
+:focus-visible { outline: 2px solid #6b5563; outline-offset: 3px; border-radius: 6px; }
+
+.font-serif-display { font-family: var(--font-serif); }
+.font-hand { font-family: var(--font-hand); }
+
+/* Paper card: soft shadow, warm border, faint ruled edge on letter paper. */
+.paper-card {
+  background: #fffdf8;
+  border: 1px solid #e8dcc6;
+  box-shadow: 0 2px 0 rgba(81, 68, 61, 0.06), 0 14px 30px rgba(81, 68, 61, 0.08);
+}
+.letter-paper {
+  background-color: #fffdf8;
+  background-image: repeating-linear-gradient(transparent, transparent 27px, rgba(125, 138, 110, 0.25) 28px);
+  border: 1px solid #e8dcc6;
+  border-radius: 16px;
+  padding: 20px 18px;
+  line-height: 28px;
+}
+/* Washi tape strip, used on cards and polaroids. */
+.washi {
+  display: block;
+  width: 84px;
+  height: 22px;
+  margin: -26px auto 10px;
+  border-radius: 2px;
+  opacity: 0.85;
+  transform: rotate(-2deg);
+  box-shadow: 0 1px 2px rgba(81, 68, 61, 0.15);
+}
+.washi-sage { background: repeating-linear-gradient(45deg, #e3ebdd 0 8px, #c9d8bd 8px 16px); }
+.washi-rose { background: repeating-linear-gradient(45deg, #f4dfe3 0 8px, #e7c3cb 8px 16px); }
+.washi-butter { background: repeating-linear-gradient(45deg, #f8edc9 0 8px, #eedda0 8px 16px); }
+.washi-powder { background: repeating-linear-gradient(45deg, #dfeaf3 0 8px, #c2d6e6 8px 16px); }
+.washi-lilac { background: repeating-linear-gradient(45deg, #eae1f1 0 8px, #d5c6e4 8px 16px); }
+
+/* Polaroid: white frame, photo, handwritten caption, slight varied rotation. */
+.polaroid {
+  background: #fffdf8;
+  border: 1px solid #e8dcc6;
+  box-shadow: 0 14px 30px rgba(81, 68, 61, 0.12);
+  padding: 10px 10px 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.polaroid:hover { transform: rotate(0deg) translateY(-3px) !important; box-shadow: 0 20px 36px rgba(81, 68, 61, 0.16); }
+.rot-l { transform: rotate(-1.4deg); }
+.rot-r { transform: rotate(1.2deg); }
+.rot-0 { transform: rotate(-0.3deg); }
+
+/* Private journal: visually distinct — lilac, stitched edge, never mistaken for shared. */
+.journal-private {
+  background: #eae1f1;
+  border: 1.5px dashed #9b86ad;
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+/* Room tiles on Home: pastel, organic, gentle lift. */
+.room-tile { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.room-tile:hover { transform: translateY(-3px) rotate(0deg) !important; box-shadow: 0 18px 32px rgba(81, 68, 61, 0.14); }
+
+/* Tiny floating decoration: slow, subtle, and only one element at a time. */
+.float-soft { animation: floatSoft 7s ease-in-out infinite; }
+@keyframes floatSoft { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-6px) rotate(4deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .float-soft { animation: none; }
+}
