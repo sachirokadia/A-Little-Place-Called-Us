@@ -18,8 +18,8 @@ export function Page({ title, subtitle, children, actions }: { title: string; su
       className="mx-auto w-full max-w-5xl px-4 pb-32 pt-6 sm:px-6 sm:pt-8">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-serif-display text-3xl leading-tight text-cocoa sm:text-4xl">{title}</h1>
-          {subtitle && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-cocoa-soft sm:text-base">{subtitle}</p>}
+          <h1 className="font-serif-display text-3xl leading-tight text-[#f8f1e7] drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)] sm:text-4xl">{title}</h1>
+          {subtitle && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#d8d2c4] sm:text-base">{subtitle}</p>}
         </div>
         {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </header>
@@ -29,7 +29,9 @@ export function Page({ title, subtitle, children, actions }: { title: string; su
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`paper-card rounded-3xl p-4 sm:p-5 ${className}`}>{children}</section>;
+  // Parchment dialog over the night world: the card sets its own dark text
+  // so room content never inherits the night body's cream text color.
+  return <section className={`paper-card rounded-3xl p-4 text-cocoa sm:p-5 ${className}`}>{children}</section>;
 }
 
 export function Empty({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
@@ -43,14 +45,19 @@ export function Empty({ title, body, action }: { title: string; body: string; ac
 }
 
 export function Button({ children, onClick, variant = 'primary', type = 'button', disabled = false, ariaLabel }: {
-  children: ReactNode; onClick?: () => void; variant?: 'primary' | 'quiet' | 'danger' | 'gold-outline';
+  children: ReactNode; onClick?: () => void; variant?: 'primary' | 'quiet' | 'danger' | 'gold-outline' | 'night-quiet';
   type?: 'button' | 'submit'; disabled?: boolean; ariaLabel?: string;
 }) {
   const styles = {
-    primary: 'bg-cocoa text-cream hover:bg-plum',
-    quiet: 'border border-cocoa/30 bg-transparent text-cocoa hover:bg-cream-deep',
+    // Game gold: warm window-light button, dark text — the primary action everywhere.
+    primary: 'bg-[#e8c87a] text-[#241d12] shadow-[0_4px_14px_rgba(232,200,122,0.35)] hover:bg-[#f2d894]',
+    // Parchment chip: readable on BOTH the night background (page headers,
+    // settings) and paper cards (room content) — quiet buttons live in both.
+    quiet: 'border border-[#e8c87a]/60 bg-[#fffdf8] text-cocoa hover:bg-cream-deep',
     danger: 'bg-[#a85a5a] text-cream hover:bg-[#965050]',
     'gold-outline': 'border border-[#8a6d4b] text-[#8a6d4b] hover:bg-butter',
+    // For buttons sitting directly on the night background (auth forms): light text.
+    'night-quiet': 'border border-white/30 bg-transparent text-[#f8f1e7] hover:bg-white/10',
   }[variant];
   return (
     <button type={type} onClick={onClick} disabled={disabled} aria-label={ariaLabel}
@@ -63,7 +70,7 @@ export function Button({ children, onClick, variant = 'primary', type = 'button'
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-bold text-cocoa">{label}</span>
+      <span className="field-label mb-1.5 block text-sm font-bold text-cocoa">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-xs text-cocoa-soft">{hint}</span>}
     </label>
@@ -76,7 +83,7 @@ export function Toast({ message, kind }: { message: string; kind: 'ok' | 'error'
   if (!message) return null;
   return (
     <div role={kind === 'error' ? 'alert' : 'status'} aria-live="polite"
-      className={`fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl px-4 py-3 text-center text-sm font-semibold shadow-xl ${kind === 'error' ? 'bg-rose text-cocoa ring-1 ring-[#a85a5a]/50' : 'bg-sage text-cocoa ring-1 ring-cocoa/20'}`}>
+      className={`fixed bottom-28 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl px-4 py-3 text-center text-sm font-semibold shadow-xl ring-1 ${kind === 'error' ? 'bg-[#3a2027] text-[#f8f1e7] ring-[#a85a5a]' : 'bg-[#1d2a4a] text-[#f8f1e7] ring-[#e8c87a]/60'}`}>
       {message}
     </div>
   );

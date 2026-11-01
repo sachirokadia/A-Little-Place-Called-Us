@@ -54,21 +54,63 @@ export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (
   const favourites = [...store.shared(d.reminders), ...store.shared(d.memories)].filter((i) => i.isFavorite).length;
   const partnerNames = d.members.length >= 2 ? d.members.map((m) => (m.id === store.viewerId ? 'You' : m.displayName || 'Partner')) : ['You', 'Partner'];
 
+  // Game-map hotspots: each room is a glowing interactable spot on the
+  // night-cottage world, like locations on an exploration-game map. The
+  // scene keeps one fixed aspect ratio, so these positions stay on their
+  // features on every screen size.
+  const HOTSPOTS: { id: RoomId; icon: string; x: number; y: number }[] = [
+    { id: 'future', icon: '✦', x: 85, y: 14 },
+    { id: 'quiet', icon: '☾', x: 60, y: 46 },
+    { id: 'appreciations', icon: '✧', x: 32, y: 60 },
+    { id: 'memories', icon: '❦', x: 77, y: 66 },
+    { id: 'letters', icon: '✉', x: 19, y: 72 },
+    { id: 'reminders', icon: '✦', x: 47, y: 78 },
+  ];
+  const hotspotName = (id: RoomId) => ROOMS.find((r) => r.id === id)?.name ?? id;
+  const hotspotShort: Record<RoomId, string> = { home: 'Home', reminders: 'Reminders', memories: 'Memories', letters: 'Letters', quiet: 'Quiet Room', appreciations: 'See in You', future: 'Future', deleted: 'Deleted', settings: 'Settings' };
+
   return (
     <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative mx-auto w-full max-w-5xl px-4 pb-32 pt-6 sm:px-6">
-      {/* Reference scene: the supplied night-cottage photograph, presented as a
-          scrapbook plate. The cream paper card below carries the exact brand copy,
-          so text stays readable against the night scene. */}
+      {/* The game world: the supplied night-cottage photograph as a living
+          map — twinkling stars, drifting fireflies, glowing windows, and
+          pulsing hotspots you tap to enter each room. The parchment card
+          below carries the exact brand copy. */}
       <section aria-label="A Little Place Called Us">
-        <div className="relative overflow-hidden rounded-[28px] border border-cocoa/15 shadow-[0_18px_36px_rgba(81,68,61,0.18)]">
+        <div className="relative overflow-hidden rounded-[28px] border-2 border-[#e8c87a]/50 shadow-[0_18px_40px_rgba(0,0,0,0.5),0_0_32px_rgba(232,200,122,0.20)]">
           <img
             src="/night-cottage.jpg"
             alt="A stone cottage at night, its windows glowing warm, beneath a moonlit garden of ferns, hostas and jasmine"
-            className="block aspect-[4/3] w-full object-cover object-[62%_50%] sm:aspect-[21/9] sm:object-[50%_30%]"
+            className="block aspect-[16/10] w-full object-cover object-[50%_42%]"
           />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/30 to-transparent" aria-hidden="true" />
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            <span className="star" style={{ left: '8%', top: '10%', width: 4, height: 4, animationDelay: '0s' }} />
+            <span className="star" style={{ left: '22%', top: '6%', width: 3, height: 3, animationDelay: '0.8s' }} />
+            <span className="star" style={{ left: '38%', top: '14%', width: 4, height: 4, animationDelay: '1.6s' }} />
+            <span className="star" style={{ left: '55%', top: '7%', width: 3, height: 3, animationDelay: '0.4s' }} />
+            <span className="star" style={{ left: '70%', top: '12%', width: 4, height: 4, animationDelay: '2.1s' }} />
+            <span className="star" style={{ left: '92%', top: '8%', width: 3, height: 3, animationDelay: '1.2s' }} />
+            <span className="star" style={{ left: '15%', top: '26%', width: 3, height: 3, animationDelay: '2.6s' }} />
+            <span className="star" style={{ left: '47%', top: '24%', width: 3, height: 3, animationDelay: '0.9s' }} />
+            <span className="window-glow" style={{ left: '52%', top: '44%', width: 110, height: 70 }} />
+            <span className="window-glow" style={{ left: '66%', top: '44%', width: 90, height: 60, animationDelay: '1.4s' }} />
+            <span className="firefly" style={{ left: '25%', top: '72%', width: 6, height: 6, animationDelay: '0s' }} />
+            <span className="firefly" style={{ left: '55%', top: '80%', width: 5, height: 5, animationDelay: '2s' }} />
+            <span className="firefly" style={{ left: '82%', top: '76%', width: 6, height: 6, animationDelay: '3.5s' }} />
+            <span className="firefly" style={{ left: '40%', top: '88%', width: 5, height: 5, animationDelay: '1.2s' }} />
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 to-transparent" aria-hidden="true" />
+          <nav aria-label="Places in your world">
+            {HOTSPOTS.map((h) => (
+              <button key={h.id} onClick={() => go(h.id)} className="hotspot" style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                aria-label={`Enter ${hotspotName(h.id)}`}>
+                <span className="hotspot-dot" aria-hidden="true">{h.icon}</span>
+                <span className="hotspot-label"><span className="sm:hidden">{hotspotShort[h.id]}</span><span className="hidden sm:inline">{hotspotName(h.id)}</span></span>
+              </button>
+            ))}
+          </nav>
+          <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/45 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#f8edc9] backdrop-blur-sm">✦ Tap a glowing spot to enter ✦</p>
         </div>
-        <div className="paper-card relative z-10 mx-3 -mt-16 rounded-[28px] px-5 pb-8 pt-8 text-center shadow-[0_14px_30px_rgba(81,68,61,0.16)] sm:mx-8 sm:-mt-20 sm:pt-10">
+        <div className="paper-card relative z-10 mx-3 -mt-6 rounded-[28px] px-5 pb-8 pt-8 text-center sm:mx-8 sm:-mt-20 sm:pt-10">
           <Washi tone="rose" />
           <div className="flex justify-center"><AvatarPair names={partnerNames} /></div>
           <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.28em] text-plum">YOUR SHARED DIGITAL HOME</p>
@@ -78,22 +120,20 @@ export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (
             A place for the things we want to remember, the things we don't always know how to say, and the future we're still imagining.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <button onClick={onRandomReminder} className="min-h-11 rounded-full bg-cocoa px-5 py-2 text-sm font-bold text-cream hover:bg-plum">A little reminder for today</button>
+            <button onClick={onRandomReminder} className="min-h-11 rounded-full bg-[#e8c87a] px-5 py-2 text-sm font-bold text-[#241d12] hover:bg-[#f2d894]">A little reminder for today</button>
             <button onClick={() => go('memories')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">＋ Add a memory</button>
             <button onClick={() => go('letters')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">✎ Write a letter</button>
           </div>
         </div>
       </section>
 
-      {/* Scrapbook room tiles */}
-      <nav aria-label="Rooms" className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Location list: the same six rooms as a quick-travel row, so no room
+          depends on spotting its hotspot. */}
+      <nav aria-label="Quick travel" className="mt-8 flex gap-2 overflow-x-auto pb-1">
         {ROOMS.map((r) => (
-          <button key={r.id} onClick={() => go(r.id)} style={{ transform: `rotate(${r.rot})` }}
-            className={`room-tile rounded-3xl border border-cocoa/15 p-5 text-left shadow-[0_10px_24px_rgba(81,68,61,0.10)] ${r.bg}`}>
-            <span className="text-2xl text-cocoa" aria-hidden="true">{r.icon}</span>
-            <span className="font-serif-display mt-2 block text-xl text-cocoa">{r.name}</span>
-            <span className="mt-1 block text-sm leading-relaxed text-cocoa-soft">{r.line}</span>
-            <span className="font-hand mt-2 block text-xl text-plum">{r.doodle}</span>
+          <button key={r.id} onClick={() => go(r.id)}
+            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-[#e8c87a]/50 bg-[#1d2a4a]/90 px-4 py-2 text-sm font-bold text-[#f8f1e7] shadow-[0_4px_14px_rgba(0,0,0,0.35)] hover:bg-[#2a3a5f]">
+            <span aria-hidden="true">{r.icon}</span> {r.name}
           </button>
         ))}
       </nav>
