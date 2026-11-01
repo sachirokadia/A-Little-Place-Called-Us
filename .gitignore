@@ -1,0 +1,87 @@
+# A Little Place Called Us — new-stack baseline .gitignore
+# Purpose: keep real credentials, private keys, database dumps and
+# user-uploaded media out of Git by default, while allowing example
+# environment templates (e.g. .env.example) to be committed later.
+# This file covers the planned stack only: React/Vite frontend,
+# Node/Express backend, TypeScript, Prisma, standalone PostgreSQL.
+# No application code is implied by this file.
+
+# ---- Dependencies ----
+node_modules/
+.pnp/
+.pnp.*
+
+# ---- Build outputs ----
+dist/
+build/
+out/
+.vite/
+.turbo/
+
+# ---- TypeScript build info ----
+*.tsbuildinfo
+
+# ---- Test / coverage ----
+coverage/
+
+# ---- Logs ----
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Environment files: NEVER commit real values ----
+# Ignore every .env file first, then re-allow only example templates.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# ---- Credentials and private keys: NEVER commit ----
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
+credentials.json
+*-credentials.json
+credentials/
+secrets/
+.ssh/
+
+# ---- Local database artifacts and dumps: NEVER commit ----
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.dmp
+*.bak
+*.sql.gz
+pgdata/
+postgres-data/
+db-data/
+.local-db/
+
+# ---- User-uploaded / private media: NEVER commit ----
+# Media belongs in private object storage in production, never in Git.
+uploads/
+user-uploads/
+private-media/
+media/uploads/
+
+# ---- Local tooling / hosting state ----
+.vercel
+.netlify
+*.local
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
