@@ -1,6 +1,9 @@
-// Phase 1A schema — core only. Games/board are Phase 1B and are
-// deliberately NOT in this schema. Prisma is the sole schema authority;
-// there is no boot-time CREATE TABLE and no second migration system.
+// Phase 1 schema — core plus a minimal, route-less GameProgress model.
+// Playable games and board are Phase 1B and are deliberately NOT in
+// this schema, and there is NO score endpoint: this model only reserves
+// the shape Phase 1B will use, with server-validated progress data.
+// Prisma is the sole schema authority; there is no boot-time
+// CREATE TABLE and no second migration system.
 // CHECK constraints that Prisma cannot express live in the reviewed
 // migration SQL under prisma/migrations/ (see that file's header).
 
@@ -80,6 +83,7 @@ model User {
   favorites    Favorite[]
   auditEvents  AuditEvent[] @relation("AuditActor")
   idempotencyKeys IdempotencyKey[]
+  gameProgress GameProgress[]
 
   @@index([emailLower])
 }
@@ -127,6 +131,7 @@ model Space {
   plans       FuturePlan[]
   reminders   Reminder[]
   voiceNotes  VoiceNote[]
+  gameProgress GameProgress[]
 }
 
 model SpaceMember {
@@ -378,4 +383,22 @@ model IdempotencyKey {
 
   @@unique([userId, key])
   @@index([userId, expiresAt])
+}
+
+// Phase 1B-ready only: no API route reads or writes this model yet,
+// and no client score is ever trusted. Progress is opaque JSON that
+// Phase 1B server validation will bound and check before storing.
+model GameProgress {
+  id        String   @id @default(uuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  playerId  String
+  player    User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  gameKey   String
+  progress  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([spaceId, playerId, gameKey])
+  @@index([spaceId, playerId])
 }

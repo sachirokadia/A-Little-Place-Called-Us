@@ -1,21 +1,54 @@
 @import "tailwindcss";
 
+/* Shared visual system — A Little Place Called Us.
+   Restrained palette only: cream paper, sage, dusty rose, muted
+   terracotta, warm wood. No glassmorphism, no generic gradients,
+   no oversized dashboard cards. */
+
 :root {
   --cream: #fdf8ee;
   --paper: #fffdf6;
+  --paper-warm: #f7ecd9;
   --ink: #4a3226;
+  --ink-soft: #6b5646;
   --sage: #7d8b6a;
+  --sage-soft: #eef3e6;
+  --sage-line: #c5d6b0;
   --rose: #c48b8b;
+  --rose-soft: #f8e8e6;
   --terracotta: #c07856;
+  --terracotta-deep: #a35f40;
   --wood: #8a6a4f;
+  --line: #e8dcc8;
+  --line-strong: #d9cbb2;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
+
+  --shadow-paper: 0 2px 0 rgba(74, 50, 38, 0.06);
+  --shadow-lift: 0 6px 18px rgba(74, 50, 38, 0.1);
+
+  --transition: 160ms ease;
 }
 
+* { box-sizing: border-box; }
 html { background: var(--cream); }
 body {
   margin: 0;
   background: var(--cream);
   color: var(--ink);
   font-family: ui-sans-system, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 1rem;
   line-height: 1.6;
 }
 h1, h2, h3, .serif {
@@ -23,35 +56,236 @@ h1, h2, h3, .serif {
   font-weight: 600;
   line-height: 1.2;
 }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.15rem; }
 a { color: var(--wood); }
+a:hover { color: var(--terracotta-deep); }
+
+/* Focus: visible everywhere, for keyboard users. */
+a:focus-visible, button:focus-visible, input:focus-visible,
+textarea:focus-visible, select:focus-visible {
+  outline: 3px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  min-width: 0;
+}
+.page-title { margin-bottom: var(--space-1); }
+.page-subtitle { margin-top: 0; color: var(--ink-soft); }
+.back-home {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  text-decoration: none;
+  font-weight: 600;
+}
+
 .paper {
   background: var(--paper);
-  border: 1px solid #e8dcc8;
-  box-shadow: 0 2px 0 rgba(74, 50, 38, 0.06);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-paper);
 }
+.notice { color: #3d5a34; background: var(--sage-soft); border: 1px solid var(--sage-line); border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; }
+.error { color: #9b3d2e; background: var(--rose-soft); border: 1px solid #e8b4a8; border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; }
+
+/* Buttons and fields — one shared set, used by every page. */
 .btn {
   display: inline-block;
   background: var(--terracotta);
   color: #fff;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.55rem 1.15rem;
   cursor: pointer;
   font-size: 0.95rem;
+  font-family: inherit;
+  transition: background var(--transition), transform var(--transition);
 }
+.btn:hover { background: var(--terracotta-deep); }
 .btn.secondary { background: var(--sage); }
-.btn.quiet { background: #e8dcc8; color: var(--ink); }
+.btn.secondary:hover { background: #6a7a58; }
+.btn.quiet { background: var(--line); color: var(--ink); }
+.btn.quiet:hover { background: var(--line-strong); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .field {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #d9cbb2;
-  border-radius: 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   padding: 0.55rem 0.75rem;
   background: #fff;
   color: var(--ink);
   font: inherit;
 }
-label { display: block; font-size: 0.9rem; margin-bottom: 0.25rem; }
-.error { color: #9b3d2e; background: #fbe9e4; border: 1px solid #e8b4a8; border-radius: 0.5rem; padding: 0.6rem 0.8rem; }
-.notice { color: #3d5a34; background: #eef3e6; border: 1px solid #c5d6b0; border-radius: 0.5rem; padding: 0.6rem 0.8rem; }
+.field:disabled { opacity: 0.6; background: var(--paper-warm); }
+label { display: block; font-size: 0.9rem; margin-bottom: var(--space-1); }
+
+/* Navigation — NavLink active state, wraps on small screens. */
+.site-nav {
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  padding: 0.75rem 1rem;
+  display: flex;
+  gap: 0.25rem 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+.site-nav .brand {
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+  margin-right: 0.5rem;
+}
+.nav-link {
+  text-decoration: none;
+  color: var(--ink-soft);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.nav-link:hover { color: var(--ink); background: var(--paper-warm); }
+.nav-link.active {
+  background: var(--sage-soft);
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--sage-line);
+}
+.nav-meta { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .site-nav { padding: 0.6rem 0.75rem; gap: 0.25rem 0.5rem; }
+  .nav-link { padding: 0.3rem 0.45rem; font-size: 0.92rem; }
+  .nav-meta { margin-left: 0; }
+  .page { padding: var(--space-4) 0.75rem var(--space-8); }
+  h1 { font-size: 1.6rem; }
+}
+
+/* Shared list + state styles. */
+.list-grid { display: grid; gap: var(--space-4); min-width: 0; }
+.state-box {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+.state-box h2, .state-box h3 { color: var(--ink); }
+.loading-dots { display: inline-block; animation: breathe 2.4s ease-in-out infinite; }
+@keyframes breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* Memory Wall — scrapbook: tilted polaroids on a warm wall. */
+.layout-scrapbook { background: var(--paper-warm); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-4); }
+.layout-scrapbook .list-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.layout-scrapbook .paper { background: #fffef9; padding-bottom: var(--space-5); }
+.layout-scrapbook .list-grid > *:nth-child(odd) { transform: rotate(-1.2deg); }
+.layout-scrapbook .list-grid > *:nth-child(even) { transform: rotate(1deg); }
+.timeline-marker {
+  border-top: 2px solid var(--sage);
+  padding-top: var(--space-2);
+  margin: var(--space-5) 0 var(--space-3);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.25rem;
+}
+.timeline-marker:first-child { margin-top: 0; }
+.polaroid-photo { max-width: 100%; border: 1px solid var(--line); border-radius: 0.25rem; }
+
+/* Letters — post office: pigeonholes, envelope cards, seals. */
+.layout-post-office .pigeonhole {
+  border: 2px solid var(--wood);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  background: var(--paper);
+}
+.layout-post-office .pigeonhole h2 { margin-top: 0; }
+.envelope { border-left: 6px solid var(--wood); }
+.envelope-sealed { border-left-color: var(--rose); }
+.envelope-private { border-left-color: var(--sage); }
+.seal {
+  display: inline-block;
+  background: var(--rose);
+  color: #fff;
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.seal-private { background: var(--sage); }
+.seal-shared { background: var(--wood); }
+
+/* Quiet Room — spacious, muted, single column, no clutter. */
+.layout-quiet { max-width: 640px; margin: 0 auto; }
+.layout-quiet .list-grid { gap: var(--space-6); }
+.breathing-wrap { text-align: center; padding: var(--space-6) 0; }
+.breathing-circle {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--sage-soft);
+  border: 2px solid var(--sage-line);
+  animation: breathe-scale 8s ease-in-out infinite;
+}
+@keyframes breathe-scale {
+  0%, 100% { transform: scale(0.85); }
+  50% { transform: scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .breathing-circle, .loading-dots { animation: none; }
+  .layout-scrapbook .list-grid > * { transform: none; }
+}
+
+/* Appreciations — framed gallery. */
+.layout-gallery .list-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.layout-gallery .paper {
+  border: 6px solid var(--wood);
+  outline: 1px solid var(--line-strong);
+  outline-offset: 3px;
+  text-align: center;
+}
+
+/* Future — a winding journey trail, not a checklist. */
+.layout-journey .list-grid { position: relative; padding-left: var(--space-5); border-left: 3px dotted var(--terracotta); }
+.journey-category {
+  display: inline-block;
+  background: var(--sage-soft);
+  border: 1px solid var(--sage-line);
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.completed-stamp {
+  display: inline-block;
+  border: 2px solid var(--terracotta);
+  color: var(--terracotta-deep);
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  font-weight: 700;
+  transform: rotate(-4deg);
+}
+
+/* Arcade — deliberately different, restrained, no fake games. */
+.arcade-note {
+  border: 3px dashed var(--wood);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  background: var(--paper);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+.cottage-destinations {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  padding: var(--space-4);
+  margin-top: var(--space-4);
+}

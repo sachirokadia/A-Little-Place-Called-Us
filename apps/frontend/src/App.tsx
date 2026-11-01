@@ -1,25 +1,34 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import { getMe, getSpace, setCsrf, type Me, type Space } from './lib/api.js';
+import { LoadingState } from './components/ui.js';
 import {
   AppreciationsPage, ArcadePage, AuthPage, DeletedPage, FavouritesPage, FuturePage,
-  HomePage, LettersPage, MemoriesPage, QuietPage, SettingsPage, SpacePage,
+  HomePage, LettersPage, MemoriesPage, NotFoundPage, QuietPage, SettingsPage, SpacePage,
 } from './routes/pages.js';
+
+const DESTINATIONS = [
+  { to: '/memories', label: 'Memory Wall' },
+  { to: '/letters', label: 'Letters' },
+  { to: '/quiet', label: 'Quiet Room' },
+  { to: '/appreciations', label: 'Things I See in You' },
+  { to: '/future', label: 'Our Future' },
+  { to: '/arcade', label: 'Secret Arcade' },
+];
 
 function Nav({ me, space }: { me: Me | null; space: Space | null }) {
   if (!me) return null;
   return (
-    <nav style={{ background: '#fffdf6', borderBottom: '1px solid #e8dcc8', padding: '0.75rem 1rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-      <Link to="/" style={{ fontWeight: 700, textDecoration: 'none', color: 'inherit' }} className="serif">A Little Place Called Us</Link>
-      <Link to="/memories">Memory Wall</Link>
-      <Link to="/letters">Letters</Link>
-      <Link to="/quiet">Quiet Room</Link>
-      <Link to="/appreciations">Things I See in You</Link>
-      <Link to="/future">Our Future</Link>
-      <Link to="/arcade">Secret Arcade</Link>
-      <span style={{ marginLeft: 'auto' }}>
+    <nav className="site-nav" aria-label="Main destinations">
+      <NavLink to="/" end className="brand serif">A Little Place Called Us</NavLink>
+      {DESTINATIONS.map((d) => (
+        <NavLink key={d.to} to={d.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
+          {d.label}
+        </NavLink>
+      ))}
+      <span className="nav-meta">
         {space ? <span>{space.name} · </span> : null}
-        <Link to="/settings">Settings</Link>
+        <NavLink to="/settings" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>Settings</NavLink>
       </span>
     </nav>
   );
@@ -50,7 +59,7 @@ export default function App() {
 
   useEffect(() => { void refresh(); }, []);
 
-  if (!checked) return <p style={{ padding: '2rem' }}>Loading your little place…</p>;
+  if (!checked) return <div className="page"><LoadingState /></div>;
 
   const signedIn = !!me;
   const signedOut = <Navigate to="/login" replace />;
@@ -72,7 +81,7 @@ export default function App() {
         <Route path="/arcade" element={signedIn ? <ArcadePage /> : signedOut} />
         <Route path="/deleted" element={signedIn && space ? <DeletedPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/settings" element={signedIn ? <SettingsPage me={me} space={space} onSignedOut={() => { setMe(null); setSpace(null); setCsrf(null); }} /> : signedOut} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <footer style={{ textAlign: 'center', padding: '1rem', color: '#6b5646' }}>
         <small>This little world grows when we both add to it.</small>

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, getSpace, listItems, setCsrf, type AnyItem, type Me, type Space } from '../lib/api.js';
-import { Card, ErrorBox, FormField, Page, fmtDate } from '../components/ui.js';
+import { Card, EmptyState, ErrorBox, ErrorState, FormField, LoadingState, Page, fmtDate } from '../components/ui.js';
 import styles from './home.module.css';
 
 export function useList(spaceId: string | null, plural: string, query = '') {
@@ -133,28 +133,76 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
   );
 }
 
-export function ListPage({ me, space, plural, singular, title, subtitle, createFields, onCreate, extraForItem, favouritedOnly = false }: {
+export function ListPage({ me, space, plural, singular, title, subtitle, createFields, onCreate, extraForItem, favouritedOnly = false, layout, groupBy, sortByTargetDate = false, pageClassName }: {
   me: Me; space: Space; plural: string; singular: string; title: string; subtitle: string;
   createFields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'select'; options?: string[] }[];
   onCreate: (spaceId: string, values: Record<string, string>) => Promise<void>;
   extraForItem?: (item: AnyItem, refresh: () => void) => React.ReactNode;
   favouritedOnly?: boolean;
+  layout?: string;
+  groupBy?: 'date-year' | 'letter-state';
+  sortByTargetDate?: boolean;
+  pageClassName?: string;
 }) {
   const query = favouritedOnly ? '?favourited=true' : '';
   const { items, error, loading, refresh } = useList(space.id, plural, query);
+  const sorted = sortByTargetDate ? [...items].sort((a, b) => {
+    const ad = a.targetDate as string | undefined;
+    const bd = b.targetDate as string | undefined;
+    if (!ad && !bd) return 0;
+    if (!ad) return 1;
+    if (!bd) return -1;
+    return ad < bd ? -1 : ad > bd ? 1 : 0;
+  }) : items;
+  const renderItem = (item: AnyItem) => {
+    const card = <ItemCard key={item.id} item={item} singular={singular} me={me} onRefresh={refresh} extra={extraForItem ? extraForItem(item, refresh) : undefined} />;
+    if (layout !== 'post-office') return card;
+    const now = new Date().toISOString();
+    const isSealed = item.visibility === 'scheduled' && item.revealAt && (item.revealAt as string) > now;
+    const isPrivate = item.visibility === 'private_draft';
+    const cls = isSealed ? 'envelope envelope-sealed' : isPrivate ? 'envelope envelope-private' : 'envelope';
+    const badge = isSealed ? <span className="seal">Sealed</span> : isPrivate ? <span className="seal seal-private">Private draft — only you can see this</span> : <span className="seal seal-shared">Shared</span>;
+    return <div key={item.id} className={cls}>{badge}{card}</div>;
+  };
+  const pageCls = [pageClassName, layout ? `layout-${layout}` : ''].filter(Boolean).join(' ') || undefined;
+  let list: React.ReactNode = <div className="list-grid">{sorted.map(renderItem)}</div>;
+  if (groupBy === 'date-year') {
+    const groups = new Map<string, AnyItem[]>();
+    for (const item of sorted) {
+      const year = item.happenedOn && typeof item.happenedOn === 'string' ? item.happenedOn.slice(0, 4) : 'No date yet';
+      const arr = groups.get(year) ?? [];
+      arr.push(item);
+      groups.set(year, arr);
+    }
+    const ordered = [...groups.entries()].sort(([a], [b]) => (a === 'No date yet' ? 1 : b === 'No date yet' ? -1 : b.localeCompare(a)));
+    list = <>{ordered.map(([year, group]) => (
+      <section key={year}>
+        <h2 className="timeline-marker">{year === 'No date yet' ? 'No date yet' : year}</h2>
+        <div className="list-grid">{group.map(renderItem)}</div>
+      </section>
+    ))}</>;
+  } else if (groupBy === 'letter-state') {
+    const now = new Date().toISOString();
+    const groups: { key: string; label: string; note: string; items: AnyItem[] }[] = [
+      { key: 'sealed', label: 'Sealed letters', note: 'Scheduled letters, still sealed until their release date.', items: sorted.filter((i) => i.visibility === 'scheduled' && i.revealAt && (i.revealAt as string) > now) },
+      { key: 'shared', label: 'Shared letters', note: 'Open letters both partners can read.', items: sorted.filter((i) => i.visibility === 'shared' || (i.visibility === 'scheduled' && !(i.revealAt && (i.revealAt as string) > now))) },
+      { key: 'private', label: 'Private drafts', note: 'Visible only to their author.', items: sorted.filter((i) => i.visibility === 'private_draft') },
+    ];
+    list = <>{groups.filter((g) => g.items.length > 0).map((g) => (
+      <section key={g.key} className="pigeonhole">
+        <h2>{g.label}</h2>
+        <p><small>{g.note}</small></p>
+        <div className="list-grid">{g.items.map(renderItem)}</div>
+      </section>
+    ))}</>;
+  }
   return (
-    <Page title={title} subtitle={subtitle}>
-      <ErrorBox message={error} />
+    <Page title={title} subtitle={subtitle} backHome className={pageCls}>
       {createFields.length > 0 && <CreateForm fields={createFields} onCreate={async (v) => { await onCreate(space.id, v); await refresh(); }} />}
-      {loading ? <p>Loading…</p> : items.length === 0 ? (
-        <p className="notice">Nothing here yet. This is an empty space waiting for your first entry — no sample content has been added for you.</p>
-      ) : (
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {items.map((item) => (
-            <ItemCard key={item.id} item={item} singular={singular} me={me} onRefresh={refresh} extra={extraForItem ? extraForItem(item, refresh) : undefined} />
-          ))}
-        </div>
-      )}
+      {error ? <ErrorState message={error} onRetry={refresh} />
+        : loading ? <LoadingState />
+        : sorted.length === 0 ? <EmptyState />
+        : list}
     </Page>
   );
 }
@@ -169,7 +217,7 @@ function MediaStrip({ linkedType, linkedId }: { linkedType: string; linkedId: st
     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
       {assets.map((a) => (
         (a.mimeType as string)?.startsWith('image/') ? (
-          <img key={a.id} src={`/api/v1/media/${a.id}`} alt="Memory photo" style={{ maxWidth: 220, borderRadius: '0.5rem' }} />
+          <img key={a.id} src={`/api/v1/media/${a.id}`} alt="Memory photo" className="polaroid-photo" style={{ maxWidth: 220 }} />
         ) : (
           <audio key={a.id} controls src={`/api/v1/media/${a.id}`} />
         )
@@ -210,7 +258,7 @@ function UploadForm({ linkedType, linkedId, onDone }: { linkedType: string; link
 export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
   return (
     <ListPage
-      me={me} space={space} plural="memories" singular="memory"
+      me={me} space={space} plural="memories" singular="memory" layout="scrapbook" groupBy="date-year"
       title="Memory Wall" subtitle="A layered scrapbook. Photos are pinned here by both of you; nothing here is sample content."
       createFields={[
         { name: 'title', label: 'Title' },
@@ -232,7 +280,7 @@ export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
 export function LettersPage({ me, space }: { me: Me; space: Space }) {
   return (
     <ListPage
-      me={me} space={space} plural="letters" singular="letter"
+      me={me} space={space} plural="letters" singular="letter" layout="post-office" groupBy="letter-state"
       title="Letters — a little post office" subtitle="Private drafts stay visible only to their author. Scheduled letters stay sealed until their release date, judged by the server's clock, not yours."
       createFields={[
         { name: 'title', label: 'Title' },
@@ -256,27 +304,37 @@ export function LettersPage({ me, space }: { me: Me; space: Space }) {
 }
 
 export function QuietPage({ me, space }: { me: Me; space: Space }) {
+  const { items, error, loading, refresh } = useList(space.id, 'journals');
+  const [breathingOn, setBreathingOn] = useState(true);
   return (
-    <div>
-      <ListPage
-        me={me} space={space} plural="journals" singular="journal"
-        title="Quiet Room" subtitle="A calm corner. Journals here are private to their author — your partner cannot see them, count them, or guess their titles. No streaks, no scores, no pressure."
-        createFields={[
-          { name: 'title', label: 'Title' },
-          { name: 'body', label: 'Journal entry', kind: 'textarea' },
-          { name: 'mood', label: 'Mood (optional)' },
-        ]}
-        onCreate={async (spaceId, v) => { await api(`/spaces/${spaceId}/journals`, { method: 'POST', body: v }); }}
-      />
-      <Page title="Voice notes" subtitle="Saved comforting voice notes. Upload an audio file to a voice note you create below.">
+    <Page title="Quiet Room" subtitle="A calm corner. Journals here are private to their author — your partner cannot see them, count them, or guess their titles. No streaks, no scores, no pressure." backHome className="layout-quiet">
+      <div className="breathing-wrap">
+        {breathingOn && <div className="breathing-circle" aria-hidden="true" />}
+        <p>Breathe in, breathe out. There is no timer here and nothing to complete — stop whenever you like.</p>
+        <button className="btn quiet" type="button" onClick={() => setBreathingOn(!breathingOn)} aria-pressed={breathingOn}>
+          {breathingOn ? 'Pause the breathing animation' : 'Show the breathing animation'}
+        </button>
+      </div>
+      <CreateForm fields={[
+        { name: 'title', label: 'Title' },
+        { name: 'body', label: 'Journal entry', kind: 'textarea' },
+        { name: 'mood', label: 'Mood (optional)' },
+      ]} onCreate={async (v) => { await api(`/spaces/${space.id}/journals`, { method: 'POST', body: v }); await refresh(); }} />
+      {error ? <ErrorState message={error} onRetry={refresh} />
+        : loading ? <LoadingState />
+        : items.length === 0 ? <EmptyState title="No journal entries yet" />
+        : <div className="list-grid">{items.map((item) => <ItemCard key={item.id} item={item} singular="journal" me={me} onRefresh={refresh} />)}</div>}
+      <section style={{ marginTop: '3rem' }}>
+        <h2>Voice notes</h2>
+        <p>Saved comforting voice notes. Upload an audio file to a voice note you create below.</p>
         <VoiceNotes space={space} />
-      </Page>
-    </div>
+      </section>
+    </Page>
   );
 }
 
 function VoiceNotes({ space }: { space: Space }) {
-  const { items, refresh } = useList(space.id, 'voice-notes');
+  const { items, error, loading, refresh } = useList(space.id, 'voice-notes');
   const [title, setTitle] = useState('');
   return (
     <div>
@@ -284,15 +342,18 @@ function VoiceNotes({ space }: { space: Space }) {
         <FormField label="Voice note title"><input className="field" value={title} onChange={(e) => setTitle(e.target.value)} /></FormField>
         <button className="btn" type="submit">Add voice note</button>
       </form>
-      <div style={{ display: 'grid', gap: '1rem' }}>
-        {items.map((item) => (
-          <Card key={item.id}>
-            <h3 style={{ marginTop: 0 }}>{item.title as string}</h3>
-            <MediaStrip linkedType="voiceNote" linkedId={item.id} />
-            <UploadForm linkedType="voiceNote" linkedId={item.id} onDone={refresh} />
-          </Card>
-        ))}
-      </div>
+      {error ? <ErrorState message={error} onRetry={refresh} />
+        : loading ? <LoadingState />
+        : items.length === 0 ? <EmptyState title="No voice notes yet" />
+        : <div style={{ display: 'grid', gap: '1rem' }}>
+          {items.map((item) => (
+            <Card key={item.id}>
+              <h3 style={{ marginTop: 0 }}>{item.title as string}</h3>
+              <MediaStrip linkedType="voiceNote" linkedId={item.id} />
+              <UploadForm linkedType="voiceNote" linkedId={item.id} onDone={refresh} />
+            </Card>
+          ))}
+        </div>}
     </div>
   );
 }
@@ -302,7 +363,7 @@ export function AppreciationsPage({ me, space }: { me: Me; space: Space }) {
   return (
     <div>
       <ListPage
-        me={me} space={space} plural="appreciations" singular="appreciation"
+        me={me} space={space} plural="appreciations" singular="appreciation" layout="gallery"
         title="Things I See in You" subtitle="A gallery of little things — appreciations and moments of courage. Nothing here is scored or ranked."
         createFields={[
           { name: 'text', label: 'Note', kind: 'textarea' },
@@ -323,7 +384,7 @@ export function AppreciationsPage({ me, space }: { me: Me; space: Space }) {
 export function FavouritesPage({ me, space }: { me: Me; space: Space }) {
   return (
     <ListPage
-      me={me} space={space} plural="appreciations" singular="appreciation"
+      me={me} space={space} plural="appreciations" singular="appreciation" layout="gallery"
       title="Favourite cards" subtitle="Cards you marked as favourites."
       createFields={[]}
       onCreate={async () => undefined}
@@ -335,7 +396,7 @@ export function FavouritesPage({ me, space }: { me: Me; space: Space }) {
 export function FuturePage({ me, space }: { me: Me; space: Space }) {
   return (
     <ListPage
-      me={me} space={space} plural="plans" singular="plan"
+      me={me} space={space} plural="plans" singular="plan" layout="journey" sortByTargetDate
       title="Our Future — an adventure map" subtitle="Plans are drawn as journeys, not checklists. Completing one can create a scrapbook memory in the same step, so it is never duplicated."
       createFields={[
         { name: 'title', label: 'Title' },
@@ -346,12 +407,15 @@ export function FuturePage({ me, space }: { me: Me; space: Space }) {
       ]}
       onCreate={async (spaceId, v) => { await api(`/spaces/${spaceId}/plans`, { method: 'POST', body: { title: v.title, detail: v.detail ?? '', category: v.category || 'other', targetDate: v.targetDate || null, location: v.location ?? '' } }); }}
       extraForItem={(item, refresh) => (
-        item.status === 'planned' ? (
+        <>
+            <p><span className="journey-category">{(item.category as string) ?? 'other'}</span>{item.location ? <span> · {item.location as string}</span> : null}</p>
+            {item.status === 'planned' ? (
           <form onSubmit={async (e) => { e.preventDefault(); const form = e.target as HTMLFormElement; const createMemory = (form.elements.namedItem('createMemory') as HTMLInputElement).checked; await api(`/plan/${item.id}/complete`, { method: 'POST', body: { createMemory, memoryTitle: item.title as string } }); refresh(); }}>
             <label><input type="checkbox" name="createMemory" defaultChecked /> Also create a Memory Wall keepsake</label>{' '}
             <button className="btn secondary" type="submit">Mark complete ✓</button>
           </form>
-        ) : <p><small>✓ Completed — stamped on the map.</small></p>
+        ) : <p><span className="completed-stamp">Completed</span></p>}
+          </>
       )}
     />
   );
@@ -367,7 +431,7 @@ export function DeletedPage({ me, space }: { me: Me; space: Space }) {
     { plural: 'reminders', singular: 'reminder', label: 'Reminders' },
   ];
   return (
-    <Page title="Deleted" subtitle="Your own soft-deleted items. Restore returns them; permanent delete is a second, explicit act and cannot be undone.">
+    <Page title="Deleted" subtitle="Your own soft-deleted items. Restore returns them; permanent delete is a second, explicit act and cannot be undone." backHome>
       {types.map((t) => <DeletedList key={t.plural} me={me} space={space} plural={t.plural} singular={t.singular} label={t.label} />)}
     </Page>
   );
@@ -401,6 +465,7 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
     try { localStorage.setItem('lp-intro-dismissed', '1'); } catch { /* ignore */ }
     setIntroDismissed(true);
   };
+  const [doorOpen, setDoorOpen] = useState(false);
   const destinations = [
     { to: '/memories', label: 'Memory Wall', note: 'Our scrapbook' },
     { to: '/letters', label: 'Letters', note: 'A little post office' },
@@ -421,14 +486,26 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
         <div className={styles.roof} />
         <div className={styles.house}>
           <div className={styles.window} />
-          <button className={styles.door} onClick={() => navigate('/letters')} aria-label="Open the cottage door to see all destinations">⌂</button>
+          <button className={styles.door} onClick={() => setDoorOpen(!doorOpen)} aria-expanded={doorOpen} aria-controls="cottage-destinations" aria-label="Open the cottage door to see all destinations">⌂</button>
           <div className={styles.window} />
         </div>
         <div className={styles.path} />
         <button className={styles.mailbox} onClick={() => navigate('/letters')} aria-label="Mailbox — open Letters">✉ Mailbox</button>
         <button className={styles.garden} onClick={() => navigate('/memories')} aria-label="Garden — open Memory Wall">❦ Garden</button>
       </div>
-      <p style={{ textAlign: 'center' }}>Tap the mailbox for Letters, the garden for the Memory Wall, or the door to wander.</p>
+      {doorOpen && (
+        <div id="cottage-destinations" className="cottage-destinations">
+          <h2 style={{ marginTop: 0 }}>Inside the cottage</h2>
+          <p>Every room is here — step through any door you like. Nothing here is a preview; each link goes to a real destination.</p>
+          <ul>
+            {destinations.map((d) => (
+              <li key={d.to}><Link to={d.to}>{d.label}</Link> — {d.note}</li>
+            ))}
+          </ul>
+          <button className="btn quiet" type="button" onClick={() => setDoorOpen(false)}>Close the door</button>
+        </div>
+      )}
+      <p style={{ textAlign: 'center' }}>Tap the mailbox for Letters, the garden for the Memory Wall, or the door to peek inside the cottage.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
         {destinations.map((d) => (
           <Link key={d.to} to={d.to} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -467,10 +544,27 @@ function RemindersSection({ space }: { space: Space }) {
   );
 }
 
+export function NotFoundPage() {
+  return (
+    <Page title="That little corner isn't here" subtitle="The page you were looking for doesn't exist in this little world.">
+      <EmptyState title="Nothing at this address" message="This address doesn't lead to a room. Choose a real destination below — every link here works." />
+      <ul style={{ marginTop: '1.5rem' }}>
+        <li><Link to="/">The Home</Link></li>
+        <li><Link to="/memories">Memory Wall</Link></li>
+        <li><Link to="/letters">Letters</Link></li>
+        <li><Link to="/quiet">Quiet Room</Link></li>
+        <li><Link to="/appreciations">Things I See in You</Link></li>
+        <li><Link to="/future">Our Future</Link></li>
+        <li><Link to="/arcade">Secret Arcade</Link></li>
+      </ul>
+    </Page>
+  );
+}
+
 export function ArcadePage() {
   return (
-    <Page title="Secret Arcade" subtitle="Our playful universe.">
-      <div className="notice">
+    <Page title="Secret Arcade" subtitle="Our playful universe." backHome>
+      <div className="arcade-note">
         <p style={{ marginTop: 0 }}>Games arrive in Phase 1B. This page is intentionally not a set of game buttons — there are no games to play here yet, and nothing here pretends otherwise.</p>
         <p style={{ marginBottom: 0 }}>When Phase 1B lands, it will bring a personalised detective mystery, a relationship board game, memory-match, and “how well do you know us?” quizzes — with game scores that never gate letters, memories, or support.</p>
       </div>
@@ -523,7 +617,7 @@ export function SpacePage({ me, onSpaceChange }: { me: Me; onSpaceChange: () => 
   const [notice, setNotice] = useState<string | null>(null);
   const navigate = useNavigate();
   return (
-    <Page title="Your space" subtitle="One space, two people. An invitation token is shown once — share it directly with your partner, and it cannot be reused after they join.">
+    <Page title="Your space" subtitle="One space, two people. An invitation token is shown once — share it directly with your partner, and it cannot be reused after they join." backHome>
       <ErrorBox message={error} />
       {notice && <p className="notice">{notice}</p>}
       <form onSubmit={async (e) => { e.preventDefault(); setError(null); try { await api('/spaces', { method: 'POST', body: { name } }); setNotice('Space created.'); onSpaceChange(); navigate('/'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not create a space'); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
@@ -548,7 +642,7 @@ export function SettingsPage({ me, space, onSignedOut }: { me: Me; space: Space 
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const isOwner = space?.members.find((m) => m.id === me.id)?.role === 'owner';
   return (
-    <Page title="Settings" subtitle="Your profile, your sessions, and your space's invitations.">
+    <Page title="Settings" subtitle="Your profile, your sessions, and your space's invitations." backHome>
       <ErrorBox message={error} />
       {notice && <p className="notice">{notice}</p>}
       <form onSubmit={async (e) => { e.preventDefault(); try { await api('/auth/me', { method: 'PATCH', body: { displayName } }); setNotice('Profile saved.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
