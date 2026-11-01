@@ -1,41 +1,10 @@
-import { motion } from 'motion/react';
+import { useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import type { RoomId } from '../lib/types';
 import type { PlaceStore } from '../lib/store';
 import { formatDate, isSealed } from '../lib/utils';
-import { Card, Washi, AvatarPair } from './ui';
-
-/** Original cottage illustration: cream walls, dusty-rose roof, sage garden,
- *  butter windows, hand-drawn flowers and a winding path. No stock imagery. */
-export function Cottage() {
-  return (
-    <svg viewBox="0 0 340 230" className="mx-auto w-full max-w-[320px] drop-shadow-[0_14px_20px_rgba(81,68,61,0.15)]" role="img" aria-label="A small cozy cottage with a garden, flowers, and warm windows">
-      <circle cx="286" cy="36" r="22" fill="#f8edc9" />
-      <circle cx="286" cy="36" r="30" fill="#f8edc9" opacity="0.35" />
-      {/* chimney + roof */}
-      <rect x="108" y="70" width="22" height="38" rx="3" fill="#fffdf8" stroke="#51443d" strokeWidth="3" />
-      <polygon points="70,138 170,58 270,138" fill="#e7c3cb" stroke="#51443d" strokeWidth="3" strokeLinejoin="round" />
-      {/* body */}
-      <rect x="92" y="132" width="156" height="78" fill="#fffdf8" stroke="#51443d" strokeWidth="3" />
-      {/* windows + door */}
-      <rect x="106" y="148" width="34" height="30" rx="3" fill="#f8edc9" stroke="#51443d" strokeWidth="2" />
-      <path d="M123 148 v30 M106 163 h34" stroke="#51443d" strokeWidth="1.5" />
-      <rect x="200" y="148" width="34" height="30" rx="3" fill="#f8edc9" stroke="#51443d" strokeWidth="2" />
-      <path d="M217 148 v30 M200 163 h34" stroke="#51443d" strokeWidth="1.5" />
-      <rect x="152" y="158" width="36" height="52" rx="4" fill="#8a6d4b" stroke="#51443d" strokeWidth="2" />
-      <circle cx="180" cy="186" r="3" fill="#f8f1e7" />
-      {/* garden path + flowers */}
-      <path d="M170 210 L170 226" stroke="#c9d8bd" strokeWidth="4" strokeLinecap="round" />
-      <path d="M20 212 Q90 200 170 212 T320 212" fill="none" stroke="#7d8a6e" strokeWidth="3" strokeLinecap="round" />
-      <g>
-        <circle cx="52" cy="200" r="7" fill="#f4dfe3" stroke="#a85a5a" strokeWidth="1.5" />
-        <circle cx="52" cy="200" r="2.5" fill="#eedda0" />
-        <circle cx="288" cy="202" r="7" fill="#eae1f1" stroke="#6b5563" strokeWidth="1.5" />
-        <circle cx="288" cy="202" r="2.5" fill="#eedda0" />
-        <circle cx="100" cy="206" r="5" fill="#dfeaf3" stroke="#6b5563" strokeWidth="1.5" />
-      </g>
-    </svg>
-  );
-}
+import { Card, Washi, AvatarPair, Button } from './ui';
+import { RoomCard } from './RoomCard';
 
 const ROOMS: { id: RoomId; name: string; line: string; icon: string; bg: string; rot: string; doodle: string }[] = [
   { id: 'reminders', name: 'Reminder Room', line: 'Small notes to find on ordinary days.', icon: '✦', bg: 'bg-butter', rot: '-1deg', doodle: 'a note pinned with love' },
@@ -44,7 +13,77 @@ const ROOMS: { id: RoomId; name: string; line: string; icon: string; bg: string;
   { id: 'quiet', name: 'Quiet Room', line: 'Support, slow breathing, and private journals.', icon: '☾', bg: 'bg-sage', rot: '1deg', doodle: 'a quiet corner, just yours' },
   { id: 'appreciations', name: 'Things I See in You', line: 'Appreciation, achievements, encouragement.', icon: '✧', bg: 'bg-lilac', rot: '-0.8deg', doodle: 'noticed, and written down' },
   { id: 'future', name: 'Our Future', line: 'Bucket lists, date ideas, and plans to keep.', icon: '→', bg: 'bg-butter', rot: '0.6deg', doodle: 'to do, together, someday' },
+  { id: 'arcade', name: 'Game Arcade', line: 'Seven games to play together, from Memory Match to Our Little World.', icon: '◎', bg: 'bg-powder', rot: '-0.4deg', doodle: 'games, coming soon' },
 ];
+
+export const WELCOME_KEY = 'our-place-welcome-dismissed';
+
+function WelcomeCard({ store, go }: { store: PlaceStore; go: (r: RoomId) => void }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(WELCOME_KEY) === '1'; } catch { return false; }
+  });
+  if (dismissed) return null;
+  const dismiss = () => {
+    try { localStorage.setItem(WELCOME_KEY, '1'); } catch { /* private mode: dismissal lasts for this session */ }
+    setDismissed(true);
+  };
+  const d = store.data;
+  // Real names only: in demo mode the members are literally "You" and "Partner",
+  // so naming them would read as a template, not as two people. In a real space,
+  // the members' display names are theirs, set in Settings.
+  const realNames = store.mode !== 'demo' && d.members.length >= 2
+    ? d.members.map((m) => m.displayName).filter(Boolean) : [];
+  // Real notes only: demo samples are explicitly labelled samples elsewhere, but
+  // showing one here as "A note for you" would present invented content as if a
+  // partner wrote it. In demo mode the welcome always shows the invitation, and
+  // in a real space it shows the latest real appreciation or shared letter.
+  const latestAppreciation = store.mode === 'demo' ? undefined : store.shared(d.appreciations)[0];
+  const latestLetter = store.mode === 'demo' ? undefined : store.visibleLetters().filter((l) => l.visibility === 'shared' && !isSealed(l, store.viewerId))[0];
+  return (
+    <section aria-label="Welcome home" className="mt-8">
+      <Card>
+        <Washi tone="sage" />
+        <h2 className="font-serif-display text-2xl text-cocoa">
+          {realNames.length >= 2 ? `Welcome home, ${realNames[0]} and ${realNames[1]}.` : 'Welcome home.'}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">
+          This is your shared home — made for the two of you, filled by both of you.
+          Take your time looking around. Nothing here needs a reply, a score, or a finish.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="quiet" onClick={() => go('memories')}>＋ Add a memory</Button>
+          <Button variant="quiet" onClick={() => go('letters')}>✎ Write a letter</Button>
+          <Button variant="quiet" onClick={() => go('appreciations')}>✧ Leave an appreciation</Button>
+          <Button variant="quiet" onClick={() => go('future')}>→ Add a small plan</Button>
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-cocoa-soft">
+          The Arcade has seven small games — Memory Match, a quiz, a board game and more.
+          They are for fun, not for proving anything: every final message can be read without winning,
+          and nothing you write here depends on a score.
+        </p>
+        <div className="mt-4 rounded-2xl border border-cocoa/15 bg-paper p-4">
+          <p className="text-xs font-extrabold uppercase tracking-widest text-cocoa-soft">A note for you</p>
+          {latestAppreciation ? (
+            <><p className="font-serif-display mt-2 text-xl leading-relaxed text-cocoa">“{latestAppreciation.text}”</p>
+            <p className="mt-2 text-sm text-cocoa-soft">— {latestAppreciation.authorName}, in Things I See in You</p></>
+          ) : latestLetter ? (
+            <><p className="font-serif-display mt-2 text-xl leading-relaxed text-cocoa">{latestLetter.title}</p>
+            <p className="mt-2 text-sm text-cocoa-soft">— {latestLetter.authorName}, in Letters. Open it there when you want to read it in full.</p></>
+          ) : (
+            <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">
+              A note from each other will live here. When you are ready — no rush, no occasion needed —
+              write one in Letters or leave an appreciation in Things I See in You.
+            </p>
+          )}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button variant="quiet" onClick={dismiss}>Hide this welcome</Button>
+          <span className="text-xs text-cocoa-soft">You can bring it back any time from Settings.</span>
+        </div>
+      </Card>
+    </section>
+  );
+}
 
 export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (r: RoomId) => void; onRandomReminder: () => void }) {
   const d = store.data;
@@ -54,10 +93,11 @@ export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (
   const favourites = [...store.shared(d.reminders), ...store.shared(d.memories)].filter((i) => i.isFavorite).length;
   const partnerNames = d.members.length >= 2 ? d.members.map((m) => (m.id === store.viewerId ? 'You' : m.displayName || 'Partner')) : ['You', 'Partner'];
 
-  // Game-map hotspots: each room is a glowing interactable spot on the
-  // night-cottage world, like locations on an exploration-game map. The
-  // scene keeps one fixed aspect ratio, so these positions stay on their
-  // features on every screen size.
+  // Hotspots: each room is a quiet paper chip pinned on the photograph.
+  // The scene keeps one fixed aspect ratio, so these positions stay on
+  // their features on every screen size. Rooms are also reachable from
+  // the quick-travel row and the bottom navigation — no room depends
+  // on spotting its hotspot.
   const HOTSPOTS: { id: RoomId; icon: string; x: number; y: number }[] = [
     { id: 'future', icon: '✦', x: 85, y: 14 },
     { id: 'quiet', icon: '☾', x: 60, y: 46 },
@@ -67,39 +107,23 @@ export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (
     { id: 'reminders', icon: '✦', x: 47, y: 78 },
   ];
   const hotspotName = (id: RoomId) => ROOMS.find((r) => r.id === id)?.name ?? id;
-  const hotspotShort: Record<RoomId, string> = { home: 'Home', reminders: 'Reminders', memories: 'Memories', letters: 'Letters', quiet: 'Quiet Room', appreciations: 'See in You', future: 'Future', deleted: 'Deleted', settings: 'Settings' };
+  const hotspotShort: Record<RoomId, string> = { home: 'Home', reminders: 'Reminders', memories: 'Memories', letters: 'Letters', quiet: 'Quiet Room', appreciations: 'See in You', future: 'Future', arcade: 'Arcade', deleted: 'Deleted', settings: 'Settings' };
 
+  const reduceMotion = useReducedMotion();
   return (
-    <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative mx-auto w-full max-w-5xl px-4 pb-32 pt-6 sm:px-6">
-      {/* The game world: the supplied night-cottage photograph as a living
-          map — twinkling stars, drifting fireflies, glowing windows, and
-          pulsing hotspots you tap to enter each room. The parchment card
-          below carries the exact brand copy. */}
+    <motion.main initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} className="relative mx-auto w-full max-w-5xl px-4 pb-32 pt-6 sm:px-6">
+      {/* The supplied reference photograph, presented plainly as a rounded
+          scrapbook plate. No CSS stars, fireflies, glows, gradients or
+          glass pills are layered over it — the photo is the artwork.
+          The parchment card below carries the exact brand copy. */}
       <section aria-label="A Little Place Called Us">
-        <div className="relative overflow-hidden rounded-[28px] border-2 border-[#e8c87a]/50 shadow-[0_18px_40px_rgba(0,0,0,0.5),0_0_32px_rgba(232,200,122,0.20)]">
+        <div className="relative overflow-hidden rounded-[28px] border border-cocoa/20 shadow-[0_16px_32px_rgba(81,68,61,0.18)]">
           <img
             src="/night-cottage.jpg"
             alt="A stone cottage at night, its windows glowing warm, beneath a moonlit garden of ferns, hostas and jasmine"
             className="block aspect-[16/10] w-full object-cover object-[50%_42%]"
           />
-          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-            <span className="star" style={{ left: '8%', top: '10%', width: 4, height: 4, animationDelay: '0s' }} />
-            <span className="star" style={{ left: '22%', top: '6%', width: 3, height: 3, animationDelay: '0.8s' }} />
-            <span className="star" style={{ left: '38%', top: '14%', width: 4, height: 4, animationDelay: '1.6s' }} />
-            <span className="star" style={{ left: '55%', top: '7%', width: 3, height: 3, animationDelay: '0.4s' }} />
-            <span className="star" style={{ left: '70%', top: '12%', width: 4, height: 4, animationDelay: '2.1s' }} />
-            <span className="star" style={{ left: '92%', top: '8%', width: 3, height: 3, animationDelay: '1.2s' }} />
-            <span className="star" style={{ left: '15%', top: '26%', width: 3, height: 3, animationDelay: '2.6s' }} />
-            <span className="star" style={{ left: '47%', top: '24%', width: 3, height: 3, animationDelay: '0.9s' }} />
-            <span className="window-glow" style={{ left: '52%', top: '44%', width: 110, height: 70 }} />
-            <span className="window-glow" style={{ left: '66%', top: '44%', width: 90, height: 60, animationDelay: '1.4s' }} />
-            <span className="firefly" style={{ left: '25%', top: '72%', width: 6, height: 6, animationDelay: '0s' }} />
-            <span className="firefly" style={{ left: '55%', top: '80%', width: 5, height: 5, animationDelay: '2s' }} />
-            <span className="firefly" style={{ left: '82%', top: '76%', width: 6, height: 6, animationDelay: '3.5s' }} />
-            <span className="firefly" style={{ left: '40%', top: '88%', width: 5, height: 5, animationDelay: '1.2s' }} />
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 to-transparent" aria-hidden="true" />
-          <nav aria-label="Places in your world">
+          <nav aria-label="Places in your home">
             {HOTSPOTS.map((h) => (
               <button key={h.id} onClick={() => go(h.id)} className="hotspot" style={{ left: `${h.x}%`, top: `${h.y}%` }}
                 aria-label={`Enter ${hotspotName(h.id)}`}>
@@ -108,7 +132,6 @@ export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (
               </button>
             ))}
           </nav>
-          <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/45 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#f8edc9] backdrop-blur-sm">✦ Tap a glowing spot to enter ✦</p>
         </div>
         <div className="paper-card relative z-10 mx-3 -mt-6 rounded-[28px] px-5 pb-8 pt-8 text-center sm:mx-8 sm:-mt-20 sm:pt-10">
           <Washi tone="rose" />
@@ -120,23 +143,35 @@ export function Home({ store, go, onRandomReminder }: { store: PlaceStore; go: (
             A place for the things we want to remember, the things we don't always know how to say, and the future we're still imagining.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <button onClick={onRandomReminder} className="min-h-11 rounded-full bg-[#e8c87a] px-5 py-2 text-sm font-bold text-[#241d12] hover:bg-[#f2d894]">A little reminder for today</button>
-            <button onClick={() => go('memories')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">＋ Add a memory</button>
-            <button onClick={() => go('letters')} className="min-h-11 rounded-full border border-cocoa/30 px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">✎ Write a letter</button>
+            <button onClick={onRandomReminder} className="min-h-11 rounded-full bg-cocoa px-5 py-2 text-sm font-bold text-cream hover:bg-[#42382f]">A little reminder for today</button>
+            <button onClick={() => go('memories')} className="min-h-11 rounded-full border border-cocoa/30 bg-paper px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">＋ Add a memory</button>
+            <button onClick={() => go('letters')} className="min-h-11 rounded-full border border-cocoa/30 bg-paper px-5 py-2 text-sm font-bold text-cocoa hover:bg-cream-deep">✎ Write a letter</button>
           </div>
         </div>
       </section>
 
-      {/* Location list: the same six rooms as a quick-travel row, so no room
-          depends on spotting its hotspot. */}
-      <nav aria-label="Quick travel" className="mt-8 flex gap-2 overflow-x-auto pb-1">
-        {ROOMS.map((r) => (
-          <button key={r.id} onClick={() => go(r.id)}
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-[#e8c87a]/50 bg-[#1d2a4a]/90 px-4 py-2 text-sm font-bold text-[#f8f1e7] shadow-[0_4px_14px_rgba(0,0,0,0.35)] hover:bg-[#2a3a5f]">
-            <span aria-hidden="true">{r.icon}</span> {r.name}
-          </button>
-        ))}
-      </nav>
+      {/* First-visit welcome (personalization phase): a gentle, dismissible
+          card — never a modal, never a forced sequence, never a task list.
+          It appears only until dismissed (localStorage, per device, so one
+          partner dismissing it does not hide it for the other), and can be
+          brought back any time from Settings. The personal message below
+          is real content when it exists (the latest shared appreciation,
+          else the latest shared, unsealed letter) and an honest invitation
+          when it does not — never an invented letter, quote, or memory. */}
+      <WelcomeCard store={store} go={go} />
+
+      {/* Room cards (Phase 2): the seven destinations as scrapbook cards,
+          replacing the duplicate quick-travel chip row. No room depends
+          on spotting its photo hotspot — every card navigates for real. */}
+      <section aria-label="Rooms in your home" className="mt-8">
+        <h2 className="font-serif-display text-2xl text-cocoa">Rooms in your home</h2>
+        <p className="mt-1 text-sm leading-relaxed text-cocoa-soft">Tap a card to enter that room.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {ROOMS.map((r) => (
+            <RoomCard key={r.id} id={r.id} name={r.name} line={r.line} icon={r.icon} bg={r.bg} rot={r.rot} doodle={r.doodle} onOpen={() => go(r.id)} />
+          ))}
+        </div>
+      </section>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <Card><p className="text-xs font-extrabold uppercase tracking-widest text-cocoa-soft">Saved favourites</p><p className="font-serif-display mt-2 text-2xl">{favourites}</p><p className="mt-1 text-sm text-cocoa-soft">Things you marked to return to.</p></Card>

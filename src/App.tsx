@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PlaceStore } from './lib/store';
+import { PlaceStore, clearDemoData } from './lib/store';
 import { supabase, supabaseConfigured } from './lib/supabase';
 import { apiConfigured, apiLogin, apiMe, apiRegister, clearApiToken, getApiToken } from './lib/api';
 import type { RoomId } from './lib/types';
@@ -8,6 +8,7 @@ import { Toast, Button, Modal, Field, inputCls, Card, Page } from './components/
 import { RemindersRoom, MemoriesRoom } from './rooms/RemindersMemories';
 import { LettersRoom, QuietRoom } from './rooms/LettersQuiet';
 import { AppreciationsRoom, FutureRoom, DeletedRoom } from './rooms/FutureAppreciations';
+import { ArcadeRoom } from './rooms/Arcade';
 
 const NAV: { id: RoomId; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: '⌂' },
@@ -17,6 +18,7 @@ const NAV: { id: RoomId; label: string; icon: string }[] = [
   { id: 'quiet', label: 'Quiet Room', icon: '☾' },
   { id: 'appreciations', label: 'See in You', icon: '✧' },
   { id: 'future', label: 'Our Future', icon: '→' },
+  { id: 'arcade', label: 'Arcade', icon: '◎' },
 ];
 
 export default function App() {
@@ -31,6 +33,9 @@ export default function App() {
   const [authState, setAuthState] = useState<'unknown' | 'signed-out' | 'signed-in'>('unknown');
   const [authForm, setAuthForm] = useState({ email: '', password: '' });
   const [spaceForm, setSpaceForm] = useState({ name: 'A Little Place Called Us', invite: '' });
+  const [profileName, setProfileName] = useState('');
+  const [inviteResult, setInviteResult] = useState<{ code: string; expiresAt: string | null } | null>(null);
+  useEffect(() => { if (room === 'settings') setProfileName(store.viewerName); }, [room]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -46,7 +51,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const onHash = () => { const h = location.hash.replace('#', '') as RoomId; if (h) setRoom(h); };
+    // An empty hash is Home — otherwise browser back from the first room
+    // visited would leave the old room on screen with a blank hash.
+    const onHash = () => { const h = location.hash.replace('#', '') as RoomId; setRoom(h || 'home'); };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -105,16 +112,16 @@ export default function App() {
   };
 
   if (apiConfigured && authState === 'unknown') {
-    return <main className="mx-auto max-w-md px-4 py-20 text-center"><p className="font-serif-display text-2xl">Opening your place…</p><p className="mt-2 text-sm text-[#d8d2c4]">Checking your session.</p></main>;
+    return <main className="mx-auto max-w-md px-4 py-20 text-center"><p className="font-serif-display text-2xl">Opening your place…</p><p className="mt-2 text-sm text-cocoa-soft">Checking your session.</p></main>;
   }
 
   if (apiConfigured && authState === 'signed-out') {
     return (
       <main className="mx-auto w-full max-w-md px-4 py-16">
-        <p className="text-xs uppercase tracking-[0.25em] text-[#e8c87a]">A quiet place, kept for two</p>
+        <p className="text-xs uppercase tracking-[0.25em] text-plum">A quiet place, kept for two</p>
         <h1 className="font-serif-display mt-3 text-4xl leading-tight">A Little Place Called Us</h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#d8d2c4]">Each person signs in with their own account, stored in PostgreSQL. A space holds exactly two members, invited by code — never public, never searchable.</p>
-        <form className="mt-6 space-y-3 rounded-2xl bg-[#1d2a4a] border border-[#e8c87a]/40 p-5 [&_.field-label]:text-[#f8f1e7]" onSubmit={async (e) => {
+        <p className="mt-3 text-sm leading-relaxed text-cocoa-soft">Each person signs in with their own account, stored in PostgreSQL. A space holds exactly two members, invited by code — never public, never searchable.</p>
+        <form className="mt-6 space-y-3 rounded-2xl bg-paper border border-cocoa/25 p-5 shadow-[0_14px_30px_rgba(81,68,61,0.12)]" onSubmit={async (e) => {
           e.preventDefault();
           setLoading(true);
           try { await apiLogin(authForm.email, authForm.password); setAuthState('signed-in'); }
@@ -124,7 +131,7 @@ export default function App() {
           <Field label="Email"><input type="email" required value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} className={inputCls} autoComplete="email" /></Field>
           <Field label="Password"><input type="password" required minLength={8} value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} className={inputCls} autoComplete="current-password" /></Field>
           <Button type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</Button>
-          <Button variant="night-quiet" disabled={loading} onClick={async () => {
+          <Button variant="quiet" disabled={loading} onClick={async () => {
             if (!authForm.email.trim() || authForm.password.length < 8) { notify('Enter an email and a password (at least 8 characters) first.', 'error'); return; }
             setLoading(true);
             try { await apiRegister(authForm.email, authForm.password, authForm.email.split('@')[0]); setAuthState('signed-in'); notify('Account created. Now create or join a space.'); }
@@ -132,23 +139,23 @@ export default function App() {
             setLoading(false);
           }}>Create an account instead</Button>
         </form>
-        <p className="mt-4 text-xs leading-relaxed text-[#d8d2c4]">No analytics, no tracking, no notifications are built into this app.</p>
+        <p className="mt-4 text-xs leading-relaxed text-cocoa-soft">No analytics, no tracking, no notifications are built into this app.</p>
         <Toast message={toast.msg} kind={toast.kind} />
       </main>
     );
   }
 
   if (supabaseConfigured && authState === 'unknown') {
-    return <main className="mx-auto max-w-md px-4 py-20 text-center"><p className="font-serif-display text-2xl">Opening your place…</p><p className="mt-2 text-sm text-[#d8d2c4]">Checking your session.</p></main>;
+    return <main className="mx-auto max-w-md px-4 py-20 text-center"><p className="font-serif-display text-2xl">Opening your place…</p><p className="mt-2 text-sm text-cocoa-soft">Checking your session.</p></main>;
   }
 
   if (supabaseConfigured && authState === 'signed-out') {
     return (
       <main className="mx-auto w-full max-w-md px-4 py-16">
-        <p className="text-xs uppercase tracking-[0.25em] text-[#e8c87a]">A quiet place, kept for two</p>
+        <p className="text-xs uppercase tracking-[0.25em] text-plum">A quiet place, kept for two</p>
         <h1 className="font-serif-display mt-3 text-4xl leading-tight">A Little Place Called Us</h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#d8d2c4]">Each person signs in with their own account. A space holds exactly two members, invited by code — never public, never searchable.</p>
-        <form className="mt-6 space-y-3 rounded-2xl bg-[#1d2a4a] border border-[#e8c87a]/40 p-5 [&_.field-label]:text-[#f8f1e7]" onSubmit={async (e) => {
+        <p className="mt-3 text-sm leading-relaxed text-cocoa-soft">Each person signs in with their own account. A space holds exactly two members, invited by code — never public, never searchable.</p>
+        <form className="mt-6 space-y-3 rounded-2xl bg-paper border border-cocoa/25 p-5 shadow-[0_14px_30px_rgba(81,68,61,0.12)]" onSubmit={async (e) => {
           e.preventDefault();
           if (!supabase) return;
           setLoading(true);
@@ -159,7 +166,7 @@ export default function App() {
           <Field label="Email"><input type="email" required value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} className={inputCls} autoComplete="email" /></Field>
           <Field label="Password"><input type="password" required value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} className={inputCls} autoComplete="current-password" /></Field>
           <Button type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</Button>
-          <Button variant="night-quiet" disabled={loading} onClick={async () => {
+          <Button variant="quiet" disabled={loading} onClick={async () => {
             if (!supabase) return;
             if (!authForm.email.trim() || authForm.password.length < 8) { notify('Enter an email and a password (at least 8 characters) first.', 'error'); return; }
             setLoading(true);
@@ -168,8 +175,28 @@ export default function App() {
             notify(error ? error.message : 'Account created. Check your email to confirm, if Supabase email confirmation is on, then sign in.', error ? 'error' : 'ok');
           }}>Create an account instead</Button>
         </form>
-        <p className="mt-4 text-xs leading-relaxed text-[#d8d2c4]">No analytics, no tracking, no notifications are built into this app.</p>
+        <p className="mt-4 text-xs leading-relaxed text-cocoa-soft">No analytics, no tracking, no notifications are built into this app.</p>
         <Toast message={toast.msg} kind={toast.kind} />
+      </main>
+    );
+  }
+
+  // Production misconfiguration gate: a production build with neither backend configured
+  // (or with a non-HTTPS backend URL, which the config flags treat as unconfigured) must
+  // NOT fall through to demo mode. Demo mode looks like a working shared home while saving
+  // only to this device, so a misconfigured production deployment could silently swallow
+  // real private content. Fail safe with a clear message instead. Local development
+  // (import.meta.env.DEV) still allows demo mode, and a correctly configured production
+  // build never reaches this screen.
+  if (import.meta.env.PROD && !apiConfigured && !supabaseConfigured) {
+    return (
+      <main className="mx-auto w-full max-w-md px-4 py-16">
+        <p className="text-xs uppercase tracking-[0.25em] text-plum">A quiet place, kept for two</p>
+        <h1 className="font-serif-display mt-3 text-4xl leading-tight">A Little Place Called Us</h1>
+        <div className="mt-6 rounded-2xl bg-paper border border-cocoa/25 p-5 shadow-[0_14px_30px_rgba(81,68,61,0.12)]">
+          <p className="font-serif-display text-xl">This deployment is not set up yet</p>
+          <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">No shared backend is configured for this deployment, so nothing you enter here would sync to your partner or be saved beyond this page. Please ask the person who deployed it to set the Supabase configuration (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, HTTPS only) and redeploy. Nothing has been saved.</p>
+        </div>
       </main>
     );
   }
@@ -177,7 +204,7 @@ export default function App() {
   const roomProps = { store, refresh, notify };
 
   return (
-    <div className="min-h-screen bg-[#0d1526] text-[#f8f1e7]">
+    <div className="min-h-screen bg-cream text-cocoa">
       {store.mode === 'demo' && (
         <div role="status" className="bg-butter px-4 py-2 text-center text-xs leading-relaxed text-cocoa ring-1 ring-inset ring-cocoa/20">
           Demo mode — sample content, saved on this device only. Connect Supabase (see README) to sync privately across devices. You are viewing as <strong>{viewerLabel}</strong>.
@@ -211,6 +238,7 @@ export default function App() {
       {room === 'quiet' && <QuietRoom {...roomProps} />}
       {room === 'appreciations' && <AppreciationsRoom {...roomProps} />}
       {room === 'future' && <FutureRoom {...roomProps} />}
+      {room === 'arcade' && <ArcadeRoom {...roomProps} />}
       {room === 'deleted' && <DeletedRoom {...roomProps} />}
       {room === 'settings' && (
         <Page title="Settings" subtitle="Your place, your rules. Nothing here is shared beyond your two-member space.">
@@ -223,41 +251,66 @@ export default function App() {
               <p className="mt-1 text-sm text-cocoa-soft">Deletion: soft first (Deleted room, restorable), permanent only by a second deliberate confirmation.</p>
             </Card>
             <Card>
+              <h2 className="font-serif-display text-xl">Your profile</h2>
+              <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">This is the name your partner sees on your memories, letters and notes.</p>
+              <div className="mt-3 space-y-2">
+                <Field label="Display name"><input value={profileName} onChange={(e) => setProfileName(e.target.value)} className={inputCls} maxLength={100} /></Field>
+                <Button onClick={async () => { try { await store.updateProfile(profileName); refresh(); notify('Display name saved.'); } catch (e) { notify(e instanceof Error ? e.message : 'Could not save that name.', 'error'); } }}>Save display name</Button>
+              </div>
+            </Card>
+            <Card>
+              <h2 className="font-serif-display text-xl">Welcome card</h2>
+              <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">The gentle welcome on Home appears until you hide it. Bring it back here any time — it never blocks anything, and it never asks you to finish a task.</p>
+              <div className="mt-3"><Button variant="quiet" onClick={() => { try { localStorage.removeItem('our-place-welcome-dismissed'); } catch { /* private mode */ } notify('The welcome will appear on Home again.'); }}>Show the welcome again</Button></div>
+            </Card>
+            {store.mode !== 'demo' && (
+              <Card>
+                <h2 className="font-serif-display text-xl">Invite your partner</h2>
+                <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">The code above never expires. For a safer share, create a single-use code instead — it works for 7 days, then stops working, even if it is forwarded.</p>
+                <div className="mt-3 space-y-2">
+                  <Button variant="quiet" onClick={async () => { try { const r = await store.createInvitation(); setInviteResult(r); notify('Invite code created. Share it privately.'); } catch (e) { notify(e instanceof Error ? e.message : 'Could not create an invite code.', 'error'); } }}>Create a 7-day invite</Button>
+                  {inviteResult && (
+                    <p className="text-sm text-cocoa-soft">Code: <span className="font-bold text-cocoa">{inviteResult.code}</span>{inviteResult.expiresAt ? <> · expires {new Date(inviteResult.expiresAt).toLocaleString()}</> : ' · valid for 7 days, single use'}</p>
+                  )}
+                </div>
+              </Card>
+            )}
+            <Card>
               <h2 className="font-serif-display text-xl">Install on your phone</h2>
               <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">On Android: open in Chrome → menu → “Add to Home screen”. On iPhone: open in Safari → Share → “Add to Home Screen”. The app works as a standalone app after that; no app store, no account beyond your own sign-in.</p>
             </Card>
             <Card>
               <h2 className="font-serif-display text-xl">Privacy, plainly</h2>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-cocoa-soft">
-                <li>Private journals and private drafts are readable only by their author — enforced by Supabase RLS, not just hidden in the UI.</li>
-                <li>Scheduled letters are masked for the recipient (SQL view) until their reveal time.</li>
-                <li>Photos and voice notes live in a private storage bucket; the app uses short-lived signed URLs, never public links.</li>
+                <li>Private journals and private drafts are readable only by their author — enforced server-side (RLS or API checks), not just hidden in the UI.</li>
+                <li>Scheduled letters are masked for the recipient (SQL view / API masking) until their reveal time.</li>
+                <li>Photos and voice notes live in private storage; the app uses short-lived signed URLs or media tokens, never public links.</li>
                 <li>No analytics, tracking, notifications, streaks, or guilt reminders are included.</li>
               </ul>
             </Card>
             <div className="flex flex-wrap gap-2">
               <Button variant="quiet" onClick={() => go('deleted')}>Open Deleted (recoverable)</Button>
-              {store.mode === 'demo' && <Button variant="danger" onClick={() => { if (confirm('Clear all demo content on this device? This cannot be undone.')) { localStorage.removeItem('our-place-demo-v1'); location.reload(); } }}>Clear demo content</Button>}
+              {store.mode === 'demo' && <Button variant="danger" onClick={() => { if (confirm('Clear all demo content on this device? This cannot be undone.')) { clearDemoData(); location.reload(); } }}>Clear demo content</Button>}
               {apiConfigured && <Button variant="quiet" onClick={() => { clearApiToken(); location.reload(); }}>Sign out</Button>}
-              {supabaseConfigured && <Button variant="quiet" onClick={async () => { await supabase?.auth.signOut(); }}>Sign out</Button>}
+              {supabaseConfigured && <Button variant="quiet" onClick={async () => { await supabase?.auth.signOut(); location.reload(); }}>Sign out</Button>}
             </div>
           </div>
         </Page>
       )}
 
-      {/* Game HUD dock: icon above label, labels wrap instead of truncating —
+      {/* Bottom navigation: icon above label, labels wrap instead of truncating —
           the old single-line bar cut "See in You" off on narrow phones. */}
-      <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-[#e8c87a]/60 bg-[#101a30]/95 shadow-[0_-8px_24px_rgba(0,0,0,0.45)] backdrop-blur">
+      <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-30 border-t border-cocoa/20 bg-cream shadow-[0_-4px_16px_rgba(81,68,61,0.10)]">
         <div className="mx-auto flex max-w-5xl items-stretch justify-between gap-1 px-2 py-1.5">
           {NAV.map((n) => (
             <button key={n.id} onClick={() => go(n.id)} aria-current={room === n.id ? 'page' : undefined}
-              className={`flex min-h-14 flex-1 flex-col items-center justify-center rounded-xl px-0.5 py-1 text-[10px] font-bold leading-tight sm:text-xs ${room === n.id ? 'bg-[#e8c87a] text-[#241d12]' : 'text-[#d8d2c4] hover:bg-white/10'}`}>
+              className={`flex min-h-14 flex-1 flex-col items-center justify-center rounded-xl px-0.5 py-1 text-[10px] font-bold leading-tight sm:text-xs ${room === n.id ? 'bg-cocoa text-cream' : 'text-cocoa-soft hover:bg-cream-deep'}`}>
               <span aria-hidden="true" className="text-base leading-none">{n.icon}</span>
               <span>{n.label}</span>
             </button>
           ))}
           <button onClick={() => go('settings')} aria-current={room === 'settings' ? 'page' : undefined}
-            className={`flex min-h-14 flex-1 flex-col items-center justify-center rounded-xl px-0.5 py-1 text-[10px] font-bold leading-tight sm:text-xs ${room === 'settings' ? 'bg-[#e8c87a] text-[#241d12]' : 'text-[#d8d2c4] hover:bg-white/10'}`}>
+            className={`flex min-h-14 flex-1 flex-col items-center justify-center rounded-xl px-0.5 py-1 text-[10px] font-bold leading-tight sm:text-xs ${room === 'settings' ? 'bg-cocoa text-cream' : 'text-cocoa-soft hover:bg-cream-deep'}`}>
             <span aria-hidden="true" className="text-base leading-none">⚙</span>
             <span>Settings</span>
           </button>
@@ -266,7 +319,7 @@ export default function App() {
 
       {randomNote && <Modal title="A note for today" onClose={() => setRandomNote(null)}>
         <p className="font-serif-display text-xl leading-relaxed">{randomNote}</p>
-        <p className="mt-3 text-sm text-[#d8d2c4]">No streak, no task attached. Just a note, when you wanted one.</p>
+        <p className="mt-3 text-sm text-cocoa-soft">No streak, no task attached. Just a note, when you wanted one.</p>
         <div className="mt-4"><Button onClick={() => setRandomNote(null)}>Keep it with me</Button></div>
       </Modal>}
 

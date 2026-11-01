@@ -3,7 +3,9 @@
  * header; it is never put in a URL except for short-lived media tokens, which
  * the server issues itself. No DATABASE_URL or JWT_SECRET ever reaches here. */
 export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
-export const apiConfigured = Boolean(API_URL);
+/** Same production HTTPS rule as Supabase: a production build must not send a Bearer
+ *  token over http://. Local development still allows http://localhost. */
+export const apiConfigured = Boolean(API_URL) && (import.meta.env.DEV || API_URL.startsWith('https://'));
 
 const TOKEN_KEY = 'our-place-api-token';
 export function getApiToken(): string | null {

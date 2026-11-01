@@ -1,25 +1,32 @@
 import { useState, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 
-/* Shared scrapbook components. All room logic stays untouched — only the
-   surfaces change: paper cards, washi tape, warm-brown controls, serif titles. */
+/* Shared scrapbook components (Phase 1 visual foundation). All room logic
+   stays untouched — only the surfaces change: paper cards, washi tape,
+   warm-brown controls, DM Serif Display titles, DM Sans interface text. */
 
 export function Washi({ tone = 'sage' }: { tone?: 'sage' | 'rose' | 'butter' | 'powder' | 'lilac' }) {
   return <span aria-hidden="true" className={`washi washi-${tone}`} />;
 }
 
-export function HandNote({ children }: { children: ReactNode }) {
-  return <p className="font-hand text-2xl leading-snug text-plum">{children}</p>;
-}
-
 export function Page({ title, subtitle, children, actions }: { title: string; subtitle?: string; children: ReactNode; actions?: ReactNode }) {
+  // Phase 8 audit fix: the CSS reduced-motion block cannot stop Motion's
+  // JS-driven fade, so skip the entrance animation entirely when the
+  // user prefers reduced motion. No visual change otherwise.
+  const reduceMotion = useReducedMotion();
   return (
-    <motion.main initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
+    <motion.main initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
       className="mx-auto w-full max-w-5xl px-4 pb-32 pt-6 sm:px-6 sm:pt-8">
+      {/* Shared room template (Phase 2): every room page offers the same
+          working way back. Hash routing keeps this in sync with the
+          browser back button, so a direct visit still lands on Home. */}
+      <div className="mb-4">
+        <Button variant="quiet" onClick={() => { location.hash = 'home'; window.scrollTo({ top: 0 }); }} ariaLabel="Back to home">← Back to Home</Button>
+      </div>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-serif-display text-3xl leading-tight text-[#f8f1e7] drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)] sm:text-4xl">{title}</h1>
-          {subtitle && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#d8d2c4] sm:text-base">{subtitle}</p>}
+          <h1 className="font-serif-display text-3xl leading-tight text-cocoa sm:text-4xl">{title}</h1>
+          {subtitle && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-cocoa-soft sm:text-base">{subtitle}</p>}
         </div>
         {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </header>
@@ -29,8 +36,7 @@ export function Page({ title, subtitle, children, actions }: { title: string; su
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  // Parchment dialog over the night world: the card sets its own dark text
-  // so room content never inherits the night body's cream text color.
+  // Parchment card on the cream page ground; text is warm brown throughout.
   return <section className={`paper-card rounded-3xl p-4 text-cocoa sm:p-5 ${className}`}>{children}</section>;
 }
 
@@ -45,19 +51,16 @@ export function Empty({ title, body, action }: { title: string; body: string; ac
 }
 
 export function Button({ children, onClick, variant = 'primary', type = 'button', disabled = false, ariaLabel }: {
-  children: ReactNode; onClick?: () => void; variant?: 'primary' | 'quiet' | 'danger' | 'gold-outline' | 'night-quiet';
+  children: ReactNode; onClick?: () => void; variant?: 'primary' | 'quiet' | 'danger' | 'gold-outline';
   type?: 'button' | 'submit'; disabled?: boolean; ariaLabel?: string;
 }) {
   const styles = {
-    // Game gold: warm window-light button, dark text — the primary action everywhere.
-    primary: 'bg-[#e8c87a] text-[#241d12] shadow-[0_4px_14px_rgba(232,200,122,0.35)] hover:bg-[#f2d894]',
-    // Parchment chip: readable on BOTH the night background (page headers,
-    // settings) and paper cards (room content) — quiet buttons live in both.
-    quiet: 'border border-[#e8c87a]/60 bg-[#fffdf8] text-cocoa hover:bg-cream-deep',
+    // Phase 1 primary: solid warm brown, cream text, soft shadow only.
+    primary: 'bg-cocoa text-cream shadow-[0_3px_10px_rgba(81,68,61,0.25)] hover:bg-[#42382f]',
+    // Parchment chip for secondary actions, on cream or on paper cards.
+    quiet: 'border border-cocoa/30 bg-paper text-cocoa hover:bg-cream-deep',
     danger: 'bg-[#a85a5a] text-cream hover:bg-[#965050]',
     'gold-outline': 'border border-[#8a6d4b] text-[#8a6d4b] hover:bg-butter',
-    // For buttons sitting directly on the night background (auth forms): light text.
-    'night-quiet': 'border border-white/30 bg-transparent text-[#f8f1e7] hover:bg-white/10',
   }[variant];
   return (
     <button type={type} onClick={onClick} disabled={disabled} aria-label={ariaLabel}
@@ -83,19 +86,19 @@ export function Toast({ message, kind }: { message: string; kind: 'ok' | 'error'
   if (!message) return null;
   return (
     <div role={kind === 'error' ? 'alert' : 'status'} aria-live="polite"
-      className={`fixed bottom-28 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl px-4 py-3 text-center text-sm font-semibold shadow-xl ring-1 ${kind === 'error' ? 'bg-[#3a2027] text-[#f8f1e7] ring-[#a85a5a]' : 'bg-[#1d2a4a] text-[#f8f1e7] ring-[#e8c87a]/60'}`}>
+      className={`fixed bottom-28 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl px-4 py-3 text-center text-sm font-semibold shadow-xl ring-1 ${kind === 'error' ? 'bg-rose text-cocoa ring-rose-deep' : 'bg-paper text-cocoa ring-cocoa/20'}`}>
       {message}
     </div>
   );
 }
 
-export function ConfirmDelete({ onConfirm, label = 'Delete' }: { onConfirm: () => void; label?: string }) {
+export function ConfirmDelete({ onConfirm, label = 'Delete', note, confirmLabel }: { onConfirm: () => void; label?: string; note?: string; confirmLabel?: string }) {
   const [armed, setArmed] = useState(false);
   if (!armed) return <Button variant="quiet" onClick={() => setArmed(true)}>{label}</Button>;
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      <span className="text-xs text-cocoa-soft">This moves it to Deleted, where it can be restored. Continue?</span>
-      <Button variant="danger" onClick={onConfirm}>Yes, move to Deleted</Button>
+      <span className="text-xs text-cocoa-soft">{note ?? 'This moves it to Deleted, where it can be restored. Continue?'}</span>
+      <Button variant="danger" onClick={onConfirm}>{confirmLabel ?? 'Yes, move to Deleted'}</Button>
       <Button variant="quiet" onClick={() => setArmed(false)}>Keep it</Button>
     </span>
   );

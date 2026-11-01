@@ -2,9 +2,9 @@ import type {
   Appreciation, CollectionName, FuturePlan, JournalEntry, Letter, Memory,
   NewItem, PlaceData, Profile, Reminder, Space, VoiceNoteMeta,
 } from './types';
-import { fileToDataUrl, makeInviteCode, nowIso, todayIsoDate, uid } from './utils';
+import { fileToDataUrl, makeInviteCode, nowIso, todayIsoDate, uid, validateMediaSignature } from './utils';
 import { supabase, supabaseConfigured } from './supabase';
-import { API_URL, apiConfigured, apiFetch } from './api';
+import { API_URL, apiConfigured, apiFetch, getApiToken } from './api';
 
 export type AnyItem =
   | Reminder | Memory | Letter | JournalEntry | Appreciation | FuturePlan | VoiceNoteMeta;
@@ -28,7 +28,7 @@ function seed(): PlaceData {
       { ...base, id: uid(), authorId: 'demo-partner', authorName: 'Partner', kind: 'prompt', text: 'Drink some water, stretch, and look out of the window for a minute.' },
     ],
     memories: [
-      { ...base, id: uid(), authorId: 'demo-you', authorName: 'You', title: 'The walk home', caption: 'Rain, shared umbrella, nowhere to rush to.', story: 'Sample memory — replace this with one of yours. Add a photo, a date, and the small detail you do not want to forget.', happenedOn: todayIsoDate(), mediaUrl: null, mediaPath: null, mediaType: 'none', isFavorite: true },
+      { ...base, id: uid(), authorId: 'demo-you', authorName: 'You', title: 'The walk home', caption: 'Rain, shared umbrella, nowhere to rush to.', story: 'Sample memory — replace this with one of yours. Add a photo, a date, and the small detail you do not want to forget.', happenedOn: todayIsoDate(), mediaUrl: null, mediaPath: null, mediaType: 'none', tags: [], isFavorite: true },
     ],
     letters: [
       { ...base, id: uid(), authorId: 'demo-partner', authorName: 'Partner', title: 'For a quiet evening', body: 'Sample shared letter — write one in your own words when you are ready. Letters here are yours to keep, not to perform.', visibility: 'shared', revealAt: null },
@@ -42,8 +42,8 @@ function seed(): PlaceData {
       { ...base, id: uid(), authorId: 'demo-partner', authorName: 'Partner', text: 'You finished the thing you kept putting off. That counts.', kind: 'achievement', forName: 'You' },
     ],
     plans: [
-      { ...base, id: uid(), authorId: 'demo-you', authorName: 'You', title: 'Cook a meal together, no phones', detail: 'Pick a recipe neither of you has tried.', category: 'date', status: 'planned', completedAt: null, completionPhotoUrl: null, completionPhotoPath: null },
-      { ...base, id: uid(), authorId: 'demo-partner', authorName: 'Partner', title: 'Watch the sunrise somewhere new', detail: 'Bring something warm to drink.', category: 'bucket', status: 'planned', completedAt: null, completionPhotoUrl: null, completionPhotoPath: null },
+      { ...base, id: uid(), authorId: 'demo-you', authorName: 'You', title: 'Cook a meal together, no phones', detail: 'Pick a recipe neither of you has tried.', category: 'date', status: 'planned', targetDate: null, completedAt: null, completionPhotoUrl: null, completionPhotoPath: null },
+      { ...base, id: uid(), authorId: 'demo-partner', authorName: 'Partner', title: 'Watch the sunrise somewhere new', detail: 'Bring something warm to drink.', category: 'bucket', status: 'planned', targetDate: null, completedAt: null, completionPhotoUrl: null, completionPhotoPath: null },
     ],
     voiceNotes: [],
   };
@@ -87,7 +87,15 @@ export class PlaceStore {
     this.mode = apiConfigured ? 'api' : supabaseConfigured ? 'supabase' : 'demo';
     this.viewerId = viewerId;
     this.viewerName = viewerName;
-    this.data = loadDemo();
+    // Phase 3: signed-in modes start empty, never with demo samples. A real
+    // user's first paint must not flash sample memories/letters, and real
+    // synced content must never be written back into the demo localStorage
+    // key (see the saveDemo guards below).
+    this.data = this.mode === 'demo' ? loadDemo() : {
+      space: { id: '', name: '', inviteCode: '', createdAt: '' },
+      members: [], reminders: [], memories: [], letters: [], journals: [],
+      appreciations: [], plans: [], voiceNotes: [],
+    };
   }
 
   /** Demo-only: which profile is "signed in". Supabase mode uses the real auth session. */
@@ -149,7 +157,7 @@ export class PlaceStore {
     }
     (this.data[collection] as AnyItem[]).unshift(item as AnyItem);
     this.version++;
-    saveDemo(this.data);
+    if (this.mode === 'demo') saveDemo(this.data);
     return item;
   }
 
@@ -166,13 +174,12 @@ export class PlaceStore {
       const saved = await apiFetch(`/api/items/${collection}/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }) as unknown as AnyItem;
       Object.assign(item, saved);
       this.version++;
-      saveDemo(this.data);
-      return;
+      return; // API mode never writes to the demo localStorage key.
     }
     if (this.mode === 'supabase' && supabase) await this.supabaseUpdate(collection, id, patch);
     Object.assign(item, patch, { updatedAt: nowIso() });
     this.version++;
-    saveDemo(this.data);
+    if (this.mode === 'demo') saveDemo(this.data);
   }
 
   /** Soft delete: recoverable from the Deleted room. Permanent deletion is a separate, confirmed step. */
@@ -201,7 +208,7 @@ export class PlaceStore {
     if (this.mode === 'supabase' && supabase) await this.supabaseDelete(collection, id);
     this.data[collection] = (this.data[collection] as AnyItem[]).filter((i) => i.id !== id) as never;
     this.version++;
-    saveDemo(this.data);
+    if (this.mode === 'demo') saveDemo(this.data);
   }
 
   async toggleFavorite(collection: CollectionName, id: string): Promise<void> {
@@ -264,6 +271,40 @@ export class PlaceStore {
     return space;
   }
 
+  // ---------- Phase 3: profiles + invitations ----------
+  async updateProfile(displayName: string): Promise<void> {
+    const name = displayName.trim().slice(0, 100);
+    if (!name) throw new Error('Please enter a display name.');
+    if (this.mode === 'api') {
+      const saved = await apiFetch('/api/auth/me', { method: 'PATCH', body: JSON.stringify({ displayName: name }) }) as { displayName: string };
+      this.viewerName = saved.displayName;
+    } else if (this.mode === 'supabase' && supabase) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sign in first.');
+      const { error } = await supabase.from('profiles').upsert({ id: user.id, display_name: name, updated_at: new Date().toISOString() });
+      if (error) throw new Error(error.message);
+      this.viewerName = name;
+    }
+    this.data.members = this.data.members.map((m) => (m.id === this.viewerId ? { ...m, displayName: name, shortName: name } : m));
+    this.version++;
+    if (this.mode === 'demo') saveDemo(this.data);
+  }
+
+  async createInvitation(): Promise<{ code: string; expiresAt: string | null }> {
+    if (this.mode === 'api') {
+      const r = await apiFetch('/api/invitations', { method: 'POST', body: JSON.stringify({}) }) as { code: string; expiresAt: string };
+      return { code: r.code, expiresAt: r.expiresAt };
+    }
+    if (this.mode === 'supabase' && supabase) {
+      // create_invitation is a security-definer RPC: the code is generated
+      // server-side, expires in 7 days, and is single-use (migration 0004).
+      const { data, error } = await supabase.rpc('create_invitation', { p_space_id: this.data.space.id });
+      if (error || !data) throw new Error(error?.message || 'Could not create an invite code.');
+      return { code: String(data), expiresAt: null };
+    }
+    throw new Error('Invitations are only available in a signed-in space.');
+  }
+
   // ---------- Supabase loading (only when configured + signed in) ----------
   async loadFromSupabase(): Promise<boolean> {
     if (!supabase) return false;
@@ -288,11 +329,14 @@ export class PlaceStore {
       id: String(r.id), spaceId: String(r.space_id), authorId: String(r.author_id), authorName: String(r.author_name),
       createdAt: String(r.created_at), updatedAt: String(r.updated_at), deletedAt: r.deleted_at ? String(r.deleted_at) : null, isFavorite: Boolean(r.is_favorite),
     });
-    // Letters are read through the sealed view when it exists (body masked until reveal_at for non-authors).
-    // Fall back to the table if the view has not been created yet — the client still hides sealed bodies.
-    let letterRows: Record<string, unknown>[] = [];
+    // Letters are read ONLY through the sealed view (body masked until reveal_at for non-authors).
+    // There is deliberately no fallback to the raw letters table: the raw table's SELECT policy
+    // returns sealed bodies to members (the masking lives in the view), so falling back on a
+    // view error would silently hand a partner sealed letters before their reveal time.
+    // If the view query fails, loading fails loudly instead, with the space-setup message.
     const { data: viewRows, error: viewErr } = await supabase.from('letters_visible').select('*').eq('space_id', space.id).order('created_at', { ascending: false });
-    letterRows = viewErr ? await fetchTable('letters') : ((viewRows as Record<string, unknown>[]) || []);
+    if (viewErr) throw new Error(viewErr.message);
+    const letterRows: Record<string, unknown>[] = (viewRows as Record<string, unknown>[]) || [];
     const [remRows, memRows, jourRows, appRows, planRows, voiceRows, memberRes] = await Promise.all([
       fetchTable('reminders'), fetchTable('memories'), fetchTable('journal_entries'), fetchTable('appreciations'), fetchTable('future_plans'), fetchTable('voice_notes'),
       supabase.from('space_members').select('user_id').eq('space_id', space.id),
@@ -301,20 +345,34 @@ export class PlaceStore {
     // array — mapping the response itself threw "(E || []).map is not a function"
     // and left the whole load (and the viewer id) on demo data.
     const memberRows = (memberRes.data || []) as { user_id: string }[];
+    // Phase 3 profiles: use real display names where they exist (migration
+    // 0004 creates a profile on sign-up; older accounts get one upserted
+    // below). A partner's name is visible only because they share this
+    // space — the profiles RLS policy allows exactly that, nothing more.
+    const { data: profileRows } = await supabase.from('profiles').select('id, display_name').in('id', memberRows.map((m) => m.user_id));
+    const profileById = new Map((profileRows || []).map((r) => [String(r.id), String(r.display_name || '')]));
+    if (!profileById.get(user.id)) {
+      await supabase.from('profiles').upsert({ id: user.id, display_name: this.viewerName }).then(() => { /* best effort */ });
+      profileById.set(user.id, this.viewerName);
+    }
+    const memberProfiles: Profile[] = memberRows.map((m) => {
+      const name = profileById.get(m.user_id) || (m.user_id === user.id ? 'You' : 'Partner');
+      return { id: m.user_id, displayName: name, shortName: m.user_id === user.id ? 'You' : name };
+    });
     const signed = async (path: string | null) => {
       if (!path) return null;
       const { data } = await supabase!.storage.from('private-media').createSignedUrl(path, 60 * 60);
       return data?.signedUrl ?? null;
     };
     const memories: Memory[] = [];
-    for (const r of memRows) memories.push({ ...mapBase(r), title: String(r.title), caption: String(r.caption), story: String(r.story || ''), happenedOn: String(r.happened_on), mediaPath: r.media_path ? String(r.media_path) : null, mediaUrl: await signed(r.media_path ? String(r.media_path) : null), mediaType: (r.media_type as 'photo' | 'none') || 'none' });
+    for (const r of memRows) memories.push({ ...mapBase(r), title: String(r.title), caption: String(r.caption), story: String(r.story || ''), happenedOn: String(r.happened_on), mediaPath: r.media_path ? String(r.media_path) : null, mediaUrl: await signed(r.media_path ? String(r.media_path) : null), mediaType: (r.media_type as 'photo' | 'none') || 'none', tags: Array.isArray(r.tags) ? (r.tags as unknown[]).map(String) : [] });
     const plans: FuturePlan[] = [];
-    for (const r of planRows) plans.push({ ...mapBase(r), title: String(r.title), detail: String(r.detail || ''), category: r.category as FuturePlan['category'], status: r.status as FuturePlan['status'], completedAt: r.completed_at ? String(r.completed_at) : null, completionPhotoPath: r.completion_photo_path ? String(r.completion_photo_path) : null, completionPhotoUrl: await signed(r.completion_photo_path ? String(r.completion_photo_path) : null) });
+    for (const r of planRows) plans.push({ ...mapBase(r), title: String(r.title), detail: String(r.detail || ''), category: r.category as FuturePlan['category'], status: r.status as FuturePlan['status'], targetDate: r.target_date ? String(r.target_date).slice(0, 10) : null, completedAt: r.completed_at ? String(r.completed_at) : null, completionPhotoPath: r.completion_photo_path ? String(r.completion_photo_path) : null, completionPhotoUrl: await signed(r.completion_photo_path ? String(r.completion_photo_path) : null) });
     const voiceNotes: VoiceNoteMeta[] = [];
     for (const r of voiceRows) voiceNotes.push({ ...mapBase(r), title: String(r.title), durationSec: r.duration_sec ? Number(r.duration_sec) : null, mediaPath: r.media_path ? String(r.media_path) : null, mediaUrl: await signed(r.media_path ? String(r.media_path) : null), room: (r.room as VoiceNoteMeta['room']) || 'quiet', linkedId: r.linked_id ? String(r.linked_id) : null });
     this.data = {
       space,
-      members: memberRows.map((m) => ({ id: m.user_id, displayName: m.user_id === user.id ? 'You' : 'Partner', shortName: m.user_id === user.id ? 'You' : 'Partner' })),
+      members: memberProfiles,
       reminders: remRows.map((r) => ({ ...mapBase(r), text: String(r.text), kind: r.kind as Reminder['kind'] })),
       memories,
       letters: letterRows.map((r) => ({ ...mapBase(r), title: String(r.title), body: String(r.body || ''), visibility: r.visibility as Letter['visibility'], revealAt: r.reveal_at ? String(r.reveal_at) : null })),
@@ -334,6 +392,9 @@ export class PlaceStore {
     if (!user) throw new Error('Sign in first.');
     this.viewerId = user.id;
     this.viewerName = (user.email || '').split('@')[0] || 'You';
+    // One space per user (the database trigger enforces this too).
+    const { data: existing } = await supabase.from('space_members').select('space_id').eq('user_id', user.id).limit(1);
+    if (existing && existing.length) throw new Error('You already belong to a space.');
     const space: Space = { id: uid(), name: name.trim(), inviteCode: makeInviteCode(), createdAt: nowIso() };
     const { error } = await supabase.from('spaces').insert({ id: space.id, name: space.name, invite_code: space.inviteCode, created_by: user.id });
     if (error) throw new Error(error.message);
@@ -376,11 +437,11 @@ export class PlaceStore {
       created_at: item.createdAt, updated_at: item.updatedAt, deleted_at: item.deletedAt, is_favorite: item.isFavorite,
     };
     if (collection === 'reminders') { const r = item as Reminder; return { ...b, text: r.text, kind: r.kind }; }
-    if (collection === 'memories') { const m = item as Memory; return { ...b, title: m.title, caption: m.caption, story: m.story, happened_on: m.happenedOn, media_path: m.mediaPath, media_type: m.mediaType }; }
+    if (collection === 'memories') { const m = item as Memory; return { ...b, title: m.title, caption: m.caption, story: m.story, happened_on: m.happenedOn, media_path: m.mediaPath, media_type: m.mediaType, tags: m.tags ?? [] }; }
     if (collection === 'letters') { const l = item as Letter; return { ...b, title: l.title, body: l.body, visibility: l.visibility, reveal_at: l.revealAt }; }
     if (collection === 'journals') { const j = item as JournalEntry; return { ...b, title: j.title, body: j.body, mood: j.mood }; }
     if (collection === 'appreciations') { const a = item as Appreciation; return { ...b, text: a.text, kind: a.kind, for_name: a.forName }; }
-    if (collection === 'plans') { const p = item as FuturePlan; return { ...b, title: p.title, detail: p.detail, category: p.category, status: p.status, completed_at: p.completedAt, completion_photo_path: p.completionPhotoPath }; }
+    if (collection === 'plans') { const p = item as FuturePlan; return { ...b, title: p.title, detail: p.detail, category: p.category, status: p.status, target_date: p.targetDate, completed_at: p.completedAt, completion_photo_path: p.completionPhotoPath }; }
     const v = item as VoiceNoteMeta; return { ...b, title: v.title, duration_sec: v.durationSec, media_path: v.mediaPath, room: v.room, linked_id: v.linkedId };
   }
 
@@ -400,15 +461,37 @@ export class PlaceStore {
     if (error) throw new Error(`Could not delete that permanently. ${error.message}`);
   }
 
-  /** Upload to the private `private-media` bucket. Path is namespaced by space so RLS on storage can check it. */
+  /** Upload to the private `private-media` bucket. Path is namespaced by space so RLS on storage can check it.
+   *  Upload validation runs here, in front of every backend, not only in the form that happened
+   *  to call it. Layered checks: this client check (extension + MIME + size + file
+   *  signature), the Storage extension/kind policy in migration 0009 (which blocks
+   *  .html even via direct Storage API calls), and the API server's signature check
+   *  (API mode only). Supabase mode has no trusted server that can decode media, so
+   *  a direct Storage API call can still upload a correctly-named file with spoofed
+   *  content — the residual risk is documented in the Phase 10 report, and is kept low
+   *  because media is rendered only via <img>/<audio> and served with an image/audio
+   *  content-type derived from the whitelisted extension. */
   async uploadMedia(file: File, kind: 'photo' | 'voice'): Promise<{ path: string; url: string }> {
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (kind === 'photo') {
+      if (!file.type.startsWith('image/') || !['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'].includes(ext)) {
+        throw new Error('That file is not an allowed photo (JPG, PNG, GIF, WebP or AVIF).');
+      }
+    } else {
+      if (!file.type.startsWith('audio/') || !['mp3', 'wav', 'ogg', 'm4a', 'webm'].includes(ext)) {
+        throw new Error('That file is not an allowed audio file (MP3, WAV, OGG, M4A or WebM).');
+      }
+    }
+    if (file.size > 25 * 1024 * 1024) throw new Error('That file is over 25 MB. Please choose a smaller one.');
+    const sigErr = await validateMediaSignature(file, ext);
+    if (sigErr) throw new Error(sigErr);
     if (this.mode === 'api') {
       const form = new FormData();
       form.append('file', file);
       form.append('kind', kind);
       const res = await fetch(`${API_URL}/api/upload`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('our-place-api-token') || ''}` },
+        headers: { Authorization: `Bearer ${getApiToken() || ''}` },
         body: form,
       });
       const data = await res.json().catch(() => ({}));

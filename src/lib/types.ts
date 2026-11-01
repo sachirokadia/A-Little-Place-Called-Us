@@ -1,4 +1,4 @@
-export type RoomId = 'home' | 'reminders' | 'memories' | 'letters' | 'quiet' | 'appreciations' | 'future' | 'deleted' | 'settings';
+export type RoomId = 'home' | 'reminders' | 'memories' | 'letters' | 'quiet' | 'appreciations' | 'future' | 'arcade' | 'deleted' | 'settings';
 
 export interface Profile {
   id: string;
@@ -42,6 +42,8 @@ export interface Memory extends BaseItem {
   mediaUrl: string | null; // signed URL / data URL in demo mode
   mediaPath: string | null; // Supabase Storage path, null in demo mode
   mediaType: 'photo' | 'none';
+  /** Optional tags, e.g. ["trip", "home"]. Stored as TEXT[] in both databases. */
+  tags: string[];
 }
 
 export interface Letter extends BaseItem {
@@ -73,6 +75,8 @@ export interface FuturePlan extends BaseItem {
   detail: string;
   category: 'bucket' | 'date' | 'plan';
   status: 'planned' | 'done';
+  /** Optional target date (YYYY-MM-DD), not a deadline — just when you hope to do it. */
+  targetDate: string | null;
   completedAt: string | null;
   completionPhotoUrl: string | null;
   completionPhotoPath: string | null;

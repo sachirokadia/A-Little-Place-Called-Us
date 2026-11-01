@@ -1,8 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;600;700;800&display=swap');
 @import "tailwindcss";
 
+/* Phase 1 fonts, self-hosted in public/fonts/ so they load reliably
+   without depending on an external font service at runtime. */
+@font-face { font-family: 'DM Serif Display'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/DMSerifDisplay.woff2') format('woff2'); }
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('/fonts/DMSans.woff2') format('woff2'); }
+@font-face { font-family: 'Caveat'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/Caveat.woff2') format('woff2'); }
+
 @theme {
-  /* Cozy pastel scrapbook palette (from the redesign brief) */
+  /* Phase 1 visual foundation — pastel scrapbook tokens, exactly as briefed. */
   --color-cream: #f8f1e7;
   --color-cream-deep: #f1e6d3;
   --color-sage: #e3ebdd;
@@ -20,8 +25,8 @@
   --color-plum: #6b5563;
   --color-paper: #fffdf8;
 
-  /* Compatibility remap: existing components use night/ivory/gold names.
-     They now resolve to the pastel world, so rooms restyle without logic changes. */
+  /* Compatibility remap: older components use night/ivory/gold names.
+     They resolve to the pastel world, so rooms restyle without logic changes. */
   --color-night-950: #efe4d0;
   --color-night-900: #f8f1e7;
   --color-night-800: #fffdf8;
@@ -33,61 +38,34 @@
   --color-ivory: #51443d;
   --color-ivory-dim: #6e5e54;
 
-  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
-  --font-sans: "Nunito", ui-sans-system, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Phase 1 typography: DM Serif Display for editorial headings,
+     DM Sans for interface text, Caveat only for small annotations. */
+  --font-serif: "DM Serif Display", "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-sans: "DM Sans", ui-sans-system, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-hand: "Caveat", cursive;
 }
 
 html { scroll-behavior: smooth; }
 body {
-  /* The game world is night: deep indigo sky, warm gold window-light.
-     Content lives on parchment panels over this night, like dialog boxes
-     in a cozy game — never dark text on a dark panel. */
-  background:
-    radial-gradient(ellipse 60% 40% at 85% 0%, rgba(248, 237, 201, 0.10), transparent 70%),
-    radial-gradient(ellipse 50% 35% at 10% 100%, rgba(125, 138, 110, 0.14), transparent 70%),
-    linear-gradient(180deg, #0d1526 0%, #141f3a 55%, #0a1120 100%);
-  background-attachment: fixed;
-  color: #f8f1e7;
+  /* Phase 1 page ground: solid vanilla cream, warm-brown text.
+     No dark gradient, no neon, no glass — the photograph on Home
+     carries the night colour; the page itself stays paper-light. */
+  background: #f8f1e7;
+  color: #51443d;
   font-family: var(--font-sans);
 }
 ::selection { background: #f8edc9; color: #51443d; }
 
-/* --- Night-game world effects (pure CSS, no assets) --- */
-@keyframes twinkle { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
-@keyframes fireflyFloat {
-  0%, 100% { transform: translate(0, 0); opacity: 0.2; }
-  25% { opacity: 1; }
-  50% { transform: translate(14px, -18px); opacity: 0.6; }
-  75% { opacity: 1; }
-}
-@keyframes hotspotPing { 0% { transform: scale(1); opacity: 0.7; } 80%, 100% { transform: scale(1.9); opacity: 0; } }
-@keyframes glowPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.9; } }
-.star { position: absolute; border-radius: 9999px; background: #f8edc9; animation: twinkle 3.2s ease-in-out infinite; pointer-events: none; }
-.firefly { position: absolute; border-radius: 9999px; background: #eedda0; box-shadow: 0 0 12px 3px rgba(238, 221, 160, 0.8); animation: fireflyFloat 7s ease-in-out infinite; pointer-events: none; }
-.window-glow { position: absolute; border-radius: 9999px; background: radial-gradient(closest-side, rgba(255, 214, 130, 0.75), rgba(255, 214, 130, 0.15) 55%, transparent 75%); animation: glowPulse 4s ease-in-out infinite; pointer-events: none; }
-/* Game map hotspot: dark gold-rimmed button with an expanding ping ring,
-   like an interactable spot in an exploration game. */
-.hotspot { position: absolute; transform: translate(-50%, -50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.hotspot-dot { position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 9999px; background: rgba(19, 28, 51, 0.92); border: 2px solid #e8c87a; color: #f8edc9; font-size: 20px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 18px rgba(232, 200, 122, 0.45); transition: transform 0.15s ease; }
-.hotspot:hover .hotspot-dot, .hotspot:focus-visible .hotspot-dot { transform: scale(1.12); }
-.hotspot-dot::after { content: ''; position: absolute; inset: -2px; border-radius: 9999px; border: 2px solid rgba(232, 200, 122, 0.8); animation: hotspotPing 2.2s cubic-bezier(0, 0, 0.2, 1) infinite; }
-.hotspot-label { white-space: nowrap; border-radius: 9999px; background: rgba(255, 253, 248, 0.96); border: 1px solid rgba(232, 200, 122, 0.9); padding: 2px 9px; font-size: 11px; font-weight: 800; color: #51443d; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
-@media (max-width: 640px) {
-  .hotspot-dot { width: 38px; height: 38px; font-size: 17px; }
-  .hotspot-label { font-size: 10px; padding: 1px 7px; }
-}
-
 :focus-visible { outline: 2px solid #6b5563; outline-offset: 3px; border-radius: 6px; }
 
-.font-serif-display { font-family: var(--font-serif); }
+.font-serif-display { font-family: var(--font-serif); font-weight: 400; }
 .font-hand { font-family: var(--font-hand); }
 
-/* Paper card: soft shadow, warm border, faint ruled edge on letter paper. */
+/* Paper card: soft shadow, warm border. No glow, no glass. */
 .paper-card {
   background: #fffdf8;
-  border: 1px solid rgba(200, 164, 92, 0.55);
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25), 0 18px 36px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(232, 200, 122, 0.15);
+  border: 1px solid rgba(81, 68, 61, 0.22);
+  box-shadow: 0 1px 0 rgba(81, 68, 61, 0.06), 0 14px 30px rgba(81, 68, 61, 0.12);
 }
 .letter-paper {
   background-color: #fffdf8;
@@ -138,6 +116,18 @@ body {
 /* Room tiles on Home: pastel, organic, gentle lift. */
 .room-tile { transition: transform 0.2s ease, box-shadow 0.2s ease; }
 .room-tile:hover { transform: translateY(-3px) rotate(0deg) !important; box-shadow: 0 18px 32px rgba(81, 68, 61, 0.14); }
+
+/* Home hero hotspot: a quiet paper chip pinned on the photograph —
+   no glow, no ping ring, no neon. The photo itself is the artwork;
+   no CSS stars, fireflies or window glows are layered over it. */
+.hotspot { position: absolute; transform: translate(-50%, -50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hotspot-dot { position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 9999px; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.45); color: #51443d; font-size: 20px; box-shadow: 0 3px 10px rgba(81, 68, 61, 0.25); transition: transform 0.15s ease; }
+.hotspot:hover .hotspot-dot, .hotspot:focus-visible .hotspot-dot { transform: scale(1.08); }
+.hotspot-label { white-space: nowrap; border-radius: 9999px; background: rgba(255, 253, 248, 0.96); border: 1px solid rgba(81, 68, 61, 0.3); padding: 2px 9px; font-size: 11px; font-weight: 800; color: #51443d; box-shadow: 0 2px 8px rgba(81, 68, 61, 0.2); }
+@media (max-width: 640px) {
+  .hotspot-dot { width: 38px; height: 38px; font-size: 17px; }
+  .hotspot-label { font-size: 10px; padding: 1px 7px; }
+}
 
 /* Tiny floating decoration: slow, subtle, and only one element at a time. */
 .float-soft { animation: floatSoft 7s ease-in-out infinite; }

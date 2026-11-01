@@ -12,6 +12,9 @@ export function LettersRoom({ store, refresh, notify }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState<Letter | null>(null);
   const [form, setForm] = useState({ title: '', body: '', visibility: 'shared' as LetterVisibility, revealAt: '' });
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ title: '', body: '', visibility: 'shared' as LetterVisibility, revealAt: '' });
 
   const letters = useMemo(() => {
     let list = store.visibleLetters();
@@ -27,11 +30,23 @@ export function LettersRoom({ store, refresh, notify }: Props) {
     const err = validateRequired(form.title, 'A title', 200) || validateRequired(form.body, 'The letter', 20000);
     if (err) return notify(err, 'error');
     if (form.visibility === 'scheduled' && !form.revealAt) return notify('Choose a reveal date and time for a scheduled letter.', 'error');
+    setSaving(true);
     try {
       await store.create('letters', { spaceId: store.data.space.id, authorId: store.viewerId, authorName: store.viewerName, title: form.title.trim(), body: form.body.trim(), visibility: form.visibility, revealAt: form.visibility === 'scheduled' ? new Date(form.revealAt).toISOString() : null });
       setShowForm(false); setForm({ title: '', body: '', visibility: 'shared', revealAt: '' }); refresh();
       notify(form.visibility === 'scheduled' ? 'Letter sealed until its reveal time.' : form.visibility === 'private_draft' ? 'Private draft saved — only you can see it.' : 'Letter shared.');
-    } catch (e) { notify(e instanceof Error ? e.message : 'Could not save.', 'error'); }
+    } catch (e) { notify(e instanceof Error ? e.message : 'Could not save.', 'error'); } finally { setSaving(false); }
+  };
+
+  const saveEdit = async () => {
+    if (!selected) return;
+    const err = validateRequired(editForm.title, 'A title', 200) || validateRequired(editForm.body, 'The letter', 20000);
+    if (err) return notify(err, 'error');
+    if (editForm.visibility === 'scheduled' && !editForm.revealAt) return notify('Choose a reveal date and time for a scheduled letter.', 'error');
+    try {
+      await store.update('letters', selected.id, { title: editForm.title.trim(), body: editForm.body.trim(), visibility: editForm.visibility, revealAt: editForm.visibility === 'scheduled' ? new Date(editForm.revealAt).toISOString() : null });
+      setEditing(false); setSelected(null); refresh(); notify('Letter updated.');
+    } catch (e) { notify(e instanceof Error ? e.message : 'Could not save that change.', 'error'); }
   };
 
   return (
@@ -82,23 +97,40 @@ export function LettersRoom({ store, refresh, notify }: Props) {
             </select>
           </Field>
           {form.visibility === 'scheduled' && <Field label="Reveal date and time" hint="Until then, the other person sees only the envelope — not the body. You, as author, can still see it."><input type="datetime-local" value={form.revealAt} onChange={(e) => setForm({ ...form, revealAt: e.target.value })} className={inputCls} /></Field>}
-          <div className="flex gap-2"><Button onClick={save}>Save letter</Button><Button variant="quiet" onClick={() => setShowForm(false)}>Cancel</Button></div>
+          <div className="flex gap-2"><Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save letter'}</Button><Button variant="quiet" onClick={() => setShowForm(false)}>Cancel</Button></div>
         </div>
       </Modal>}
 
-      {selected && <Modal title={selected.title} onClose={() => setSelected(null)}>
+      {selected && <Modal title={editing ? 'Edit letter' : selected.title} onClose={() => { setSelected(null); setEditing(false); }}>
         {isSealed(selected, store.viewerId) ? (
           <div className="py-6 text-center">
             <p className="text-4xl" aria-hidden="true">✉</p>
             <p className="font-serif-display mt-3 text-xl">Sealed, with care.</p>
             <p className="mt-2 text-sm leading-relaxed text-ivory-dim">From {selected.authorName}. This letter opens {formatDateTime(selected.revealAt)}. Nothing about its words is shown before then.</p>
           </div>
+        ) : editing ? (
+          <div className="space-y-3">
+            <Field label="Title"><input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className={inputCls} maxLength={200} /></Field>
+            <Field label="Letter"><textarea value={editForm.body} onChange={(e) => setEditForm({ ...editForm, body: e.target.value })} rows={8} className={inputCls} maxLength={20000} /></Field>
+            <Field label="Who can see this?">
+              <select value={editForm.visibility} onChange={(e) => setEditForm({ ...editForm, visibility: e.target.value as LetterVisibility })} className={inputCls}>
+                <option value="shared">Shared — both of you, now</option>
+                <option value="private_draft">Private draft — only me</option>
+                <option value="scheduled">Scheduled — sealed until a reveal time</option>
+              </select>
+            </Field>
+            {editForm.visibility === 'scheduled' && <Field label="Reveal date and time"><input type="datetime-local" value={editForm.revealAt} onChange={(e) => setEditForm({ ...editForm, revealAt: e.target.value })} className={inputCls} /></Field>}
+            <div className="flex gap-2"><Button onClick={saveEdit}>Save changes</Button><Button variant="quiet" onClick={() => setEditing(false)}>Cancel</Button></div>
+          </div>
         ) : (
           <>
-            <p className="text-sm text-ivory-dim">From {selected.authorName} · {formatDate(selected.createdAt)}{selected.visibility === 'private_draft' ? ' · Private draft' : ''}</p>
+            <p className="text-sm text-ivory-dim">From {selected.authorName} · {formatDate(selected.createdAt)} · Visibility: {selected.visibility === 'private_draft' ? 'Private draft — only you' : selected.visibility === 'scheduled' ? `Scheduled — opens ${formatDateTime(selected.revealAt)}` : 'Shared — both of you'}</p>
             <div className="letter-paper mt-4"><p className="whitespace-pre-wrap text-base leading-[28px]">{selected.body}</p></div>
             <div className="mt-4 flex flex-wrap gap-2">
               <FavoriteButton active={selected.isFavorite} label="Save letter to favourites" onToggle={async () => { await store.toggleFavorite('letters', selected.id); refresh(); setSelected({ ...selected, isFavorite: !selected.isFavorite }); }} />
+              {/* A letter's words belong to its author: only the author edits.
+                  A shared letter can still be favourited or soft-deleted by either member. */}
+              {selected.authorId === store.viewerId && <Button variant="quiet" onClick={() => { setEditForm({ title: selected.title, body: selected.body, visibility: selected.visibility, revealAt: selected.revealAt ? selected.revealAt.slice(0, 16) : '' }); setEditing(true); }}>Edit</Button>}
               <ConfirmDelete onConfirm={async () => { await store.softDelete('letters', selected.id); setSelected(null); refresh(); notify('Moved to Deleted.'); }} />
             </div>
           </>
@@ -108,6 +140,9 @@ export function LettersRoom({ store, refresh, notify }: Props) {
   );
 }
 
+// Fixed gentle prompts, not user content: partner-written supportive notes are
+// stored persistently as appreciations (kind = encouragement) and listed below.
+// Nothing in this array is presented as a user's note or stored as data.
 const SUPPORTIVE = [
   'You do not have to fix everything today.',
   'Rest is not falling behind.',
@@ -123,6 +158,9 @@ export function QuietRoom({ store, refresh, notify }: Props) {
   const [journalTitle, setJournalTitle] = useState('');
   const [journalBody, setJournalBody] = useState('');
   const [journalMood, setJournalMood] = useState('calm');
+  const [journalSaving, setJournalSaving] = useState(false);
+  const [editingJournal, setEditingJournal] = useState<string | null>(null);
+  const [editJournal, setEditJournal] = useState({ title: '', body: '', mood: 'calm' });
   const [voiceTitle, setVoiceTitle] = useState('');
   const [recording, setRecording] = useState<MediaRecorder | null>(null);
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
@@ -145,10 +183,20 @@ export function QuietRoom({ store, refresh, notify }: Props) {
   const saveJournal = async () => {
     const err = validateRequired(journalTitle, 'A title', 200) || validateRequired(journalBody, 'Your entry', 20000);
     if (err) return notify(err, 'error');
+    setJournalSaving(true);
     try {
       await store.create('journals', { spaceId: store.data.space.id, authorId: store.viewerId, authorName: store.viewerName, title: journalTitle.trim(), body: journalBody.trim(), mood: journalMood, visibility: 'private' });
       setJournalTitle(''); setJournalBody(''); refresh(); notify('Private journal entry saved — only you can read it.');
-    } catch (e) { notify(e instanceof Error ? e.message : 'Could not save.', 'error'); }
+    } catch (e) { notify(e instanceof Error ? e.message : 'Could not save.', 'error'); } finally { setJournalSaving(false); }
+  };
+
+  const saveJournalEdit = async (id: string) => {
+    const err = validateRequired(editJournal.title, 'A title', 200) || validateRequired(editJournal.body, 'Your entry', 20000);
+    if (err) return notify(err, 'error');
+    try {
+      await store.update('journals', id, { title: editJournal.title.trim(), body: editJournal.body.trim(), mood: editJournal.mood });
+      setEditingJournal(null); refresh(); notify('Journal entry updated.');
+    } catch (e) { notify(e instanceof Error ? e.message : 'Could not save that change.', 'error'); }
   };
 
   const saveSupport = async () => {
@@ -192,7 +240,7 @@ export function QuietRoom({ store, refresh, notify }: Props) {
           <h2 className="font-serif-display text-xl">Breathe, slowly</h2>
           <p className="mt-1 text-sm text-ivory-dim">Inhale 4 · Hold 4 · Exhale 6. No sound. Stop whenever you like.</p>
           <div className="flex flex-col items-center py-5">
-            <div aria-live="polite" className={`flex h-28 w-28 items-center justify-center rounded-full border-2 border-cocoa/40 bg-sage text-center transition-all duration-[4000ms] ${breathing && phase === 'Inhale' ? 'scale-125' : breathing && phase === 'Exhale' ? 'scale-90' : 'scale-100'}`}>
+            <div aria-live="polite" className={`flex h-28 w-28 items-center justify-center rounded-full border-2 border-cocoa/40 bg-sage text-center transition-all duration-[4000ms] motion-reduce:scale-100 ${breathing && phase === 'Inhale' ? 'scale-125' : breathing && phase === 'Exhale' ? 'scale-90' : 'scale-100'}`}>
               <span className="font-serif-display text-lg">{breathing ? phase : 'Ready'}</span>
             </div>
             <div className="mt-4 flex gap-2">
@@ -243,15 +291,29 @@ export function QuietRoom({ store, refresh, notify }: Props) {
           <Field label="How does it feel?"><select value={journalMood} onChange={(e) => setJournalMood(e.target.value)} className={inputCls}><option value="calm">Calm</option><option value="heavy">Heavy</option><option value="hopeful">Hopeful</option><option value="tired">Tired</option><option value="grateful">Grateful</option><option value="unsure">Unsure</option></select></Field>
         </div>
         <div className="mt-3"><Field label="Entry"><textarea value={journalBody} onChange={(e) => setJournalBody(e.target.value)} rows={5} className={inputCls} maxLength={20000} placeholder="Write only for yourself…" /></Field></div>
-        <div className="mt-3"><Button onClick={saveJournal}>Save privately</Button></div>
+        <div className="mt-3"><Button onClick={saveJournal} disabled={journalSaving}>{journalSaving ? 'Saving…' : 'Save privately'}</Button></div>
         <ul className="mt-5 space-y-3">
           {journals.length === 0 && <li className="text-sm text-ivory-dim">No private entries yet.</li>}
           {journals.map((j) => (
             <li key={j.id} className="journal-private p-4">
               <p className="text-xs font-extrabold uppercase tracking-widest text-plum">🔒 Private — only you can read this</p>
-              <p className="font-serif-display mt-1 text-lg">{j.title} <span className="text-sm text-ivory-dim">· {j.mood} · {formatDate(j.createdAt)}</span></p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ivory">{j.body}</p>
-              <div className="mt-2"><ConfirmDelete onConfirm={async () => { await store.softDelete('journals', j.id); refresh(); notify('Moved to Deleted.'); }} /></div>
+              {editingJournal === j.id ? (
+                <div className="mt-3 space-y-2">
+                  <Field label="Title"><input value={editJournal.title} onChange={(e) => setEditJournal({ ...editJournal, title: e.target.value })} className={inputCls} maxLength={200} /></Field>
+                  <Field label="How does it feel?"><select value={editJournal.mood} onChange={(e) => setEditJournal({ ...editJournal, mood: e.target.value })} className={inputCls}><option value="calm">Calm</option><option value="heavy">Heavy</option><option value="hopeful">Hopeful</option><option value="tired">Tired</option><option value="grateful">Grateful</option><option value="unsure">Unsure</option></select></Field>
+                  <Field label="Entry"><textarea value={editJournal.body} onChange={(e) => setEditJournal({ ...editJournal, body: e.target.value })} rows={5} className={inputCls} maxLength={20000} /></Field>
+                  <div className="flex gap-2"><Button onClick={() => saveJournalEdit(j.id)}>Save changes</Button><Button variant="quiet" onClick={() => setEditingJournal(null)}>Cancel</Button></div>
+                </div>
+              ) : (
+                <>
+                  <p className="font-serif-display mt-1 text-lg">{j.title} <span className="text-sm text-ivory-dim">· {j.mood} · {formatDate(j.createdAt)}</span></p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ivory">{j.body}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button variant="quiet" onClick={() => { setEditingJournal(j.id); setEditJournal({ title: j.title, body: j.body, mood: j.mood }); }}>Edit</Button>
+                    <ConfirmDelete onConfirm={async () => { await store.softDelete('journals', j.id); refresh(); notify('Moved to Deleted.'); }} />
+                  </div>
+                </>
+              )}
             </li>
           ))}
         </ul>
