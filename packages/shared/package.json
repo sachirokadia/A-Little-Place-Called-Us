@@ -1,0 +1,1 @@
+{"dependencies":{"zod":"^3.23.8"},"devDependencies":{"typescript":"^5.6.0"},"exports":{".":{"default":"./dist/index.js","types":"./dist/index.d.ts"}},"main":"dist/index.js","name":"@little-place/shared","private":true,"scripts":{"build":"tsc -p tsconfig.json","typecheck":"tsc -p tsconfig.json --noEmit"},"type":"module","types":"dist/index.d.ts","version":"0.1.0"}
