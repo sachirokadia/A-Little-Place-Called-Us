@@ -456,14 +456,35 @@ function DeletedList({ me, space, plural, singular, label }: { me: Me; space: Sp
   );
 }
 
+const MAX_PATH_FLOWERS = 12;
+const FLOWER_COLOURS = ['#c48b8b', '#c07856', '#7d8b6a'];
+
+function PathFlower({ colour, rotate }: { colour: string; rotate: number }) {
+  return (
+    <svg className={styles.flower} viewBox="0 0 24 24" aria-hidden="true" style={{ transform: `rotate(${rotate}deg)` }}>
+      <line x1="12" y1="14" x2="12" y2="23" stroke="#7d8b6a" strokeWidth="1.6" />
+      <circle cx="12" cy="6" r="3.2" fill={colour} />
+      <circle cx="6.5" cy="10" r="3.2" fill={colour} />
+      <circle cx="17.5" cy="10" r="3.2" fill={colour} />
+      <circle cx="8" cy="14.5" r="3.2" fill={colour} />
+      <circle cx="16" cy="14.5" r="3.2" fill={colour} />
+      <circle cx="12" cy="10.5" r="2.4" fill="#f6d87a" />
+    </svg>
+  );
+}
+
 export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | null; onSpaceChange: () => void }) {
   const navigate = useNavigate();
   const [introDismissed, setIntroDismissed] = useState(() => {
     try { return localStorage.getItem('lp-intro-dismissed') === '1'; } catch { return false; }
   });
+  const [introOpen, setIntroOpen] = useState(() => {
+    try { return localStorage.getItem('lp-intro-dismissed') !== '1'; } catch { return true; }
+  });
   const dismissIntro = () => {
     try { localStorage.setItem('lp-intro-dismissed', '1'); } catch { /* ignore */ }
     setIntroDismissed(true);
+    setIntroOpen(false);
   };
   const [doorOpen, setDoorOpen] = useState(false);
   const destinations = [
@@ -474,39 +495,83 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
     { to: '/future', label: 'Our Future', note: 'An adventure map' },
     { to: '/arcade', label: 'Secret Arcade', note: 'Playful universe — games arrive in Phase 1B' },
   ];
+  // Real garden data: one flower per saved shared memory, capped for
+  // display, with the true count always stated in words. When the
+  // space has no memories, no flowers are faked.
+  const { items: memories } = useList(space ? space.id : null, 'memories');
+  const memoryCount = space ? memories.length : 0;
+  const visibleFlowers = Math.min(memoryCount, MAX_PATH_FLOWERS);
+  const flowerText = !space
+    ? 'No space yet, so no flowers yet — the first flower will bloom with your first shared memory.'
+    : memoryCount === 0
+      ? 'No flowers yet — the first flower will bloom with your first shared memory.'
+      : memoryCount === 1
+        ? '1 flower for 1 memory.'
+        : visibleFlowers < memoryCount
+          ? `${visibleFlowers} flowers for ${memoryCount} memories.`
+          : `${memoryCount} ${memoryCount === 1 ? 'flower' : 'flowers'} for ${memoryCount} ${memoryCount === 1 ? 'memory' : 'memories'}.`;
   return (
-    <Page title="A Little Place Called Us" subtitle="A little world, made of our memories, our letters, and all the days still waiting for us.">
-      {!introDismissed && (
-        <div className="notice" style={{ marginBottom: '1.5rem' }}>
+    <div className="page">
+      {introOpen && (
+        <div className={`notice ${styles.intro}`} role="region" aria-label="Welcome introduction">
           <p style={{ marginTop: 0 }}>Welcome to your little place. This is a private world for two people: shared memories and plans live here, private journals and drafts stay yours alone, and scheduled letters open only when their time arrives.</p>
-          <button className="btn quiet" onClick={dismissIntro}>Got it — don't show this again</button>
+          <div className={styles.introActions}>
+            <button className="btn" type="button" onClick={dismissIntro}>Got it — don&apos;t show this again</button>
+            <button className="btn quiet" type="button" onClick={dismissIntro}>Skip</button>
+          </div>
         </div>
       )}
-      <div className={styles.cottage} role="img" aria-label="A tiny illustrated cottage with a garden path and a mailbox">
-        <div className={styles.roof} />
-        <div className={styles.house}>
-          <div className={styles.window} />
-          <button className={styles.door} onClick={() => setDoorOpen(!doorOpen)} aria-expanded={doorOpen} aria-controls="cottage-destinations" aria-label="Open the cottage door to see all destinations">⌂</button>
-          <div className={styles.window} />
+      <section className={styles.scene} aria-label="A little illustrated cottage scene">
+        <div className={styles.sky} aria-hidden="true">
+          <div className={styles.sun} />
+          <div className={styles.cloud} />
         </div>
-        <div className={styles.path} />
-        <button className={styles.mailbox} onClick={() => navigate('/letters')} aria-label="Mailbox — open Letters">✉ Mailbox</button>
-        <button className={styles.garden} onClick={() => navigate('/memories')} aria-label="Garden — open Memory Wall">❦ Garden</button>
-      </div>
-      {doorOpen && (
-        <div id="cottage-destinations" className="cottage-destinations">
-          <h2 style={{ marginTop: 0 }}>Inside the cottage</h2>
-          <p>Every room is here — step through any door you like. Nothing here is a preview; each link goes to a real destination.</p>
-          <ul>
-            {destinations.map((d) => (
-              <li key={d.to}><Link to={d.to}>{d.label}</Link> — {d.note}</li>
-            ))}
-          </ul>
-          <button className="btn quiet" type="button" onClick={() => setDoorOpen(false)}>Close the door</button>
+        <div className={styles.signWrap}>
+          <h1 className={styles.sign}>A Little Place Called Us</h1>
+          <p className={styles.tagline}>A little world, made of our memories, our letters, and all the days still waiting for us.</p>
         </div>
+        <p className={styles.handNote}>Welcome home — this little world is yours, together.</p>
+        <div className={styles.cottage} aria-label="A tiny cottage with warm glowing windows, a garden path, and a mailbox">
+          <div className={styles.roof} aria-hidden="true" />
+          <div className={styles.house}>
+            <div className={styles.window} aria-hidden="true" />
+            <button className={styles.door} type="button" onClick={() => setDoorOpen(!doorOpen)} aria-expanded={doorOpen} aria-controls="cottage-destinations" aria-label="Front door — open the room-selection panel">⌂</button>
+            <div className={styles.window} aria-hidden="true" />
+          </div>
+          <div className={styles.fence} aria-hidden="true">| | | | |</div>
+          <div className={styles.pathWrap}>
+            <div className={styles.path} aria-hidden="true" />
+            <div className={styles.flowers} aria-hidden="true">
+              {Array.from({ length: visibleFlowers }, (_, i) => (
+                <PathFlower key={i} colour={FLOWER_COLOURS[i % FLOWER_COLOURS.length]!} rotate={i % 2 === 0 ? -8 : 8} />
+              ))}
+            </div>
+            <p className={styles.flowerCount}>{flowerText}</p>
+          </div>
+        </div>
+        <div className={styles.hotspots}>
+          <button className={styles.mailbox} type="button" onClick={() => navigate('/letters')} aria-label="Mailbox — open Letters">✉ Mailbox — Letters</button>
+          <button className={styles.comeIn} type="button" onClick={() => setDoorOpen(true)} aria-label="Come on in — open the room-selection panel">Come on in.</button>
+          <button className={styles.garden} type="button" onClick={() => navigate('/memories')} aria-label="Garden — open Memory Wall">❦ Garden — Memory Wall</button>
+        </div>
+        {doorOpen && (
+          <div id="cottage-destinations" className="cottage-destinations">
+            <h2 style={{ marginTop: 0 }}>Inside the cottage</h2>
+            <p>Every room is here — step through any door you like. Nothing here is a preview; each link goes to a real destination.</p>
+            <ul>
+              {destinations.map((d) => (
+                <li key={d.to}><Link to={d.to}>{d.label}</Link> — {d.note}</li>
+              ))}
+            </ul>
+            <button className="btn quiet" type="button" onClick={() => setDoorOpen(false)}>Close the door</button>
+          </div>
+        )}
+        <p className={styles.sceneHint}>Tap the mailbox for Letters, the garden for the Memory Wall, or the door — or “Come on in.” — to peek inside the cottage.</p>
+      </section>
+      {!introOpen && (
+        <button className={`btn quiet ${styles.revisit}`} type="button" onClick={() => setIntroOpen(true)}>Show the welcome again</button>
       )}
-      <p style={{ textAlign: 'center' }}>Tap the mailbox for Letters, the garden for the Memory Wall, or the door to peek inside the cottage.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
+      <div className={styles.destinations}>
         {destinations.map((d) => (
           <Link key={d.to} to={d.to} style={{ textDecoration: 'none', color: 'inherit' }}>
             <Card><h3 style={{ marginTop: 0 }}>{d.label}</h3><p style={{ marginBottom: 0 }}>{d.note}</p></Card>
@@ -520,7 +585,7 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
         </div>
       )}
       <p style={{ textAlign: 'center', marginTop: '2rem', color: '#6b5646' }}>This little world grows when we both add to it.</p>
-    </Page>
+    </div>
   );
 }
 

@@ -1,22 +1,123 @@
-.cottage {
+/* Home scene — CSS/SVG artwork only, no raster hero, no stock imagery.
+   A raster image would break hotspot alignment for mailbox, garden
+   and door, so the cottage, path and flowers are built here in CSS
+   with small inline SVGs for flowers. Decorative pieces are
+   aria-hidden in the markup; only mailbox, garden, door and
+   "Come on in." are interactive, and all of them are real buttons. */
+
+.scene {
   position: relative;
-  background: #eaf3e2;
+  background: #f3ead6;
   border: 1px solid #e8dcc8;
   border-radius: 1rem;
-  padding: 2rem 1rem 1rem;
+  padding: 1.5rem 1rem 1.25rem;
   text-align: center;
   overflow: hidden;
+  min-width: 0;
 }
+
+.sky {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 120px;
+  background: #eaf3e2;
+  pointer-events: none;
+}
+
+.sun {
+  position: absolute;
+  top: 14px;
+  right: 22px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f6d87a;
+  box-shadow: 0 0 0 8px rgba(246, 216, 122, 0.25);
+}
+
+.cloud {
+  position: absolute;
+  top: 26px;
+  left: 8%;
+  width: 72px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fffdf6;
+  opacity: 0.9;
+}
+
+.cloud::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fffdf6;
+}
+
+.signWrap {
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+
+.sign {
+  display: inline-block;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #8a6a4f;
+  color: #fffdf6;
+  border: 2px solid #5a4632;
+  border-radius: 0.5rem;
+  box-shadow: 0 3px 0 rgba(74, 50, 38, 0.25);
+  transform: rotate(-1deg);
+  font-size: 1.7rem;
+  line-height: 1.2;
+  max-width: 100%;
+}
+
+.tagline {
+  margin: 0.25rem auto 0.75rem;
+  max-width: 34rem;
+  color: #4a3226;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1rem;
+}
+
+.handNote {
+  display: inline-block;
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.9rem;
+  background: #fffdf6;
+  border: 1px solid #e8dcc8;
+  border-radius: 0.25rem;
+  transform: rotate(-2deg);
+  font-family: "Segoe Print", "Bradley Hand", cursive;
+  font-size: 1.05rem;
+  color: #6b5646;
+  max-width: 100%;
+}
+
+.cottage {
+  position: relative;
+  margin: 0 auto;
+  max-width: 320px;
+  min-width: 0;
+}
+
 .roof {
-  width: 220px;
+  width: min(220px, 78%);
   height: 0;
   margin: 0 auto;
   border-left: 40px solid transparent;
   border-right: 40px solid transparent;
   border-bottom: 70px solid #c07856;
 }
+
 .house {
-  width: 200px;
+  width: min(200px, 72%);
   margin: -4px auto 0;
   background: #fffdf6;
   border: 1px solid #e8dcc8;
@@ -25,35 +126,170 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
 }
+
 .window {
   width: 36px;
   height: 36px;
+  flex: 0 0 auto;
   background: #f6d87a;
   border: 2px solid #8a6a4f;
   border-radius: 0.25rem;
+  box-shadow: 0 0 12px rgba(246, 216, 122, 0.9);
+  animation: windowGlow 6s ease-in-out infinite alternate;
 }
+
+@keyframes windowGlow {
+  from { box-shadow: 0 0 6px rgba(246, 216, 122, 0.6); }
+  to { box-shadow: 0 0 16px rgba(246, 216, 122, 1); }
+}
+
 .door {
-  width: 52px;
-  height: 72px;
+  min-width: 52px;
+  min-height: 72px;
+  padding: 0.25rem;
   background: #7d8b6a;
   color: #fff;
   border: 2px solid #5a6b4c;
   border-radius: 0.5rem 0.5rem 0 0;
   cursor: pointer;
   font-size: 1.4rem;
+  font-family: inherit;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
+
+.door:hover, .door:focus-visible {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 14px rgba(74, 50, 38, 0.2);
+  background: #6a7a58;
+}
+
+.door:active { transform: scale(0.98); }
+
+.fence {
+  margin: 0.5rem auto 0;
+  color: #8a6a4f;
+  letter-spacing: 0.35rem;
+  font-size: 1rem;
+  user-select: none;
+}
+
+.pathWrap {
+  margin: 0.25rem auto 0.75rem;
+  max-width: 420px;
+}
+
 .path {
-  width: 60px;
-  height: 50px;
+  width: 64px;
+  min-height: 54px;
   margin: 0 auto;
   background: repeating-linear-gradient(#e8dcc8, #e8dcc8 8px, transparent 8px, transparent 16px);
 }
+
+.flowers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 28px;
+  margin-top: 0.25rem;
+}
+
+.flower {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+}
+
+.flowerCount {
+  margin: 0.25rem 0 0;
+  color: #6b5646;
+  font-size: 0.92rem;
+}
+
+.hotspots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0.75rem auto 0.5rem;
+  max-width: 560px;
+}
+
+.mailbox, .garden, .comeIn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.95rem;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
 .mailbox, .garden {
   background: #fffdf6;
   border: 1px solid #d9cbb2;
-  border-radius: 999px;
-  padding: 0.4rem 0.9rem;
-  cursor: pointer;
-  margin: 0.25rem;
+  color: #4a3226;
+}
+
+.comeIn {
+  background: #c07856;
+  border: 0;
+  color: #fff;
+  font-weight: 700;
+}
+
+.mailbox:hover, .garden:hover, .comeIn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(74, 50, 38, 0.15);
+}
+
+.mailbox:active, .garden:active, .comeIn:active { transform: scale(0.98); }
+
+.sceneHint {
+  margin: 0.5rem 0 0;
+  color: #6b5646;
+  font-size: 0.92rem;
+}
+
+.intro {
+  margin-bottom: 1.25rem;
+}
+
+.introActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.revisit {
+  margin-top: 1rem;
+}
+
+.destinations {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 480px) {
+  .scene { padding: 1.25rem 0.75rem 1rem; }
+  .sign { font-size: 1.4rem; }
+  .tagline { font-size: 0.95rem; }
+  .hotspots { flex-direction: column; align-items: stretch; }
+  .mailbox, .garden, .comeIn { width: 100%; }
+  .sun { top: 10px; right: 12px; width: 36px; height: 36px; }
+  .cloud { left: 4%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window { animation: none; }
+  .door, .mailbox, .garden, .comeIn { transition: none; }
+  .door:hover, .door:focus-visible,
+  .mailbox:hover, .garden:hover, .comeIn:hover { transform: none; }
+  .sign, .handNote { transform: none; }
 }
