@@ -35,7 +35,7 @@ async function favourite(singular: string, id: string) {
 function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singular: string; onDone: () => void; onCancel: () => void }) {
   const [values, setValues] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {};
-    for (const key of ['title', 'caption', 'story', 'body', 'text', 'detail', 'forName', 'mood', 'location']) {
+    for (const key of ['title', 'caption', 'story', 'body', 'text', 'detail', 'forName', 'mood', 'location', 'category']) {
       if (typeof item[key] === 'string') out[key] = item[key] as string;
     }
     return out;
@@ -69,25 +69,61 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
   );
 }
 
-function ItemCard({ item, singular, me, onRefresh, extra }: { item: AnyItem; singular: string; me: Me; onRefresh: () => void; extra?: React.ReactNode }) {
+function ItemCard({ item, singular, me, onRefresh, extra, envelopeMode, polaroidMode, galleryMode }: { item: AnyItem; singular: string; me: Me; onRefresh: () => void; extra?: React.ReactNode; envelopeMode?: boolean; polaroidMode?: boolean; galleryMode?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const isAuthor = item.authorId === me.id;
   const title = (item.title as string) ?? (item.text as string) ?? '';
   if (editing) return <Card><EditForm item={item} singular={singular} onDone={() => { setEditing(false); onRefresh(); }} onCancel={() => setEditing(false)} /></Card>;
+  const bodyText = (item.body as string) ?? '';
+  const storyText = (item.story as string) ?? '';
+  // Envelope mode: the body stays folded away until the reader opens it.
+  // This is a presentation animation only — what a partner may see is
+  // decided by the server, which never lists an undelivered scheduled
+  // letter to anyone but its author.
+  const bodyNode = envelopeMode ? (
+    <div className={open ? 'envelope-open' : ''}>
+      <button className="btn quiet" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Fold the letter away' : 'Open the envelope'}
+      </button>
+      <div className="envelope-body"><p style={{ whiteSpace: 'pre-wrap' }}>{bodyText}</p></div>
+    </div>
+  ) : item.body ? <p style={{ whiteSpace: 'pre-wrap' }}>{bodyText}</p> : null;
+  const storyNode = polaroidMode ? (
+    <div>
+      <button className="btn quiet" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Put the story back' : 'Read the story'}
+      </button>
+      {open && <div className="detail-panel"><p style={{ whiteSpace: 'pre-wrap' }}>{storyText}</p></div>}
+    </div>
+  ) : item.story ? <p>{storyText}</p> : null;
+  const galleryText = (item.text as string) ?? '';
+  const galleryNode = galleryMode ? (
+    <div>
+      <p>{open ? galleryText : galleryText.slice(0, 120) + (galleryText.length > 120 ? '…' : '')}</p>
+      <button className="btn quiet" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Put the card back' : 'Revisit this card'}
+      </button>
+      {open && <div className="detail-panel"><p><small>For {item.forName as string} · {(item.kind as string) ?? ''}</small></p></div>}
+    </div>
+  ) : null;
   return (
     <Card>
       <ErrorBox message={error} />
       <h3 style={{ marginTop: 0 }}>{title}</h3>
-      {item.caption ? <p>{item.caption as string}</p> : null}
-      {item.story ? <p>{item.story as string}</p> : null}
-      {item.body ? <p style={{ whiteSpace: 'pre-wrap' }}>{item.body as string}</p> : null}
-      {item.text && !item.title ? <p>{item.text as string}</p> : null}
+      {item.caption ? <p className={polaroidMode ? 'polaroid-caption' : undefined}>{item.caption as string}</p> : null}
+      {galleryNode}
+      {!galleryMode && bodyNode}
+      {!galleryMode && storyNode}
+      {item.text && !item.title && !galleryMode ? <p>{item.text as string}</p> : null}
       {item.detail ? <p>{item.detail as string}</p> : null}
       {item.happenedOn ? <p><small>Date: {fmtDate(item.happenedOn)}</small></p> : null}
+      {polaroidMode && item.happenedOn ? <div className="ticket-stub" aria-hidden="true"><span>✂ ticket</span><span>{fmtDate(item.happenedOn)}</span></div> : null}
       {item.targetDate ? <p><small>Planned for: {fmtDate(item.targetDate)}</small></p> : null}
       {item.visibility === 'scheduled' && item.revealAt ? <p><small>Sealed until {(item.revealAt as string).replace('T', ' ').slice(0, 16)}</small></p> : null}
       {item.status ? <p><small>Status: {item.status as string}</small></p> : null}
+      {item.kind ? <p><span className="quality-badge">{item.kind as string}</span>{item.forName ? <span> · for {item.forName as string}</span> : null}</p> : null}
       {extra}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
         {isAuthor && <button className="btn quiet" onClick={() => setEditing(true)}>Edit</button>}
@@ -98,15 +134,18 @@ function ItemCard({ item, singular, me, onRefresh, extra }: { item: AnyItem; sin
   );
 }
 
-function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'select'; options?: string[] }[]; onCreate: (values: Record<string, string>) => Promise<void>; submitLabel?: string }) {
+function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'datetime-local' | 'select'; options?: string[] }[]; onCreate: (values: Record<string, string>) => Promise<void>; submitLabel?: string }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSaved(false);
     try {
       await onCreate(values);
       setValues({});
+      setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
     }
@@ -114,6 +153,7 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
   return (
     <form onSubmit={submit} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1.5rem' }}>
       <ErrorBox message={error} />
+      {saved && <p className="notice" role="status">Saved — it is on the page now.</p>}
       {fields.map((f) => (
         <FormField key={f.name} label={f.label}>
           {f.kind === 'textarea' ? (
@@ -124,7 +164,7 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
               {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           ) : (
-            <input className="field" type={f.kind === 'date' ? 'date' : 'text'} value={values[f.name] ?? ''} onChange={(e) => setValues({ ...values, [f.name]: e.target.value })} />
+            <input className="field" type={f.kind === 'date' ? 'date' : f.kind === 'datetime-local' ? 'datetime-local' : 'text'} value={values[f.name] ?? ''} onChange={(e) => setValues({ ...values, [f.name]: e.target.value })} />
           )}
         </FormField>
       ))}
@@ -133,9 +173,9 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
   );
 }
 
-export function ListPage({ me, space, plural, singular, title, subtitle, createFields, onCreate, extraForItem, favouritedOnly = false, layout, groupBy, sortByTargetDate = false, pageClassName }: {
+export function ListPage({ me, space, plural, singular, title, subtitle, createFields, onCreate, extraForItem, favouritedOnly = false, layout, groupBy, sortByTargetDate = false, pageClassName, envelopeMode, polaroidMode, galleryMode, headerExtra, filterFn, emptyTitle, emptyMessage, onCreated }: {
   me: Me; space: Space; plural: string; singular: string; title: string; subtitle: string;
-  createFields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'select'; options?: string[] }[];
+  createFields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'datetime-local' | 'select'; options?: string[] }[];
   onCreate: (spaceId: string, values: Record<string, string>) => Promise<void>;
   extraForItem?: (item: AnyItem, refresh: () => void) => React.ReactNode;
   favouritedOnly?: boolean;
@@ -143,6 +183,14 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
   groupBy?: 'date-year' | 'letter-state';
   sortByTargetDate?: boolean;
   pageClassName?: string;
+  envelopeMode?: boolean;
+  polaroidMode?: boolean;
+  galleryMode?: boolean;
+  headerExtra?: React.ReactNode;
+  filterFn?: (item: AnyItem) => boolean;
+  emptyTitle?: string;
+  emptyMessage?: string;
+  onCreated?: () => void;
 }) {
   const query = favouritedOnly ? '?favourited=true' : '';
   const { items, error, loading, refresh } = useList(space.id, plural, query);
@@ -155,7 +203,7 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
     return ad < bd ? -1 : ad > bd ? 1 : 0;
   }) : items;
   const renderItem = (item: AnyItem) => {
-    const card = <ItemCard key={item.id} item={item} singular={singular} me={me} onRefresh={refresh} extra={extraForItem ? extraForItem(item, refresh) : undefined} />;
+    const card = <ItemCard key={item.id} item={item} singular={singular} me={me} onRefresh={refresh} extra={extraForItem ? extraForItem(item, refresh) : undefined} envelopeMode={envelopeMode} polaroidMode={polaroidMode} galleryMode={galleryMode} />;
     if (layout !== 'post-office') return card;
     const now = new Date().toISOString();
     const isSealed = item.visibility === 'scheduled' && item.revealAt && (item.revealAt as string) > now;
@@ -165,10 +213,11 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
     return <div key={item.id} className={cls}>{badge}{card}</div>;
   };
   const pageCls = [pageClassName, layout ? `layout-${layout}` : ''].filter(Boolean).join(' ') || undefined;
-  let list: React.ReactNode = <div className="list-grid">{sorted.map(renderItem)}</div>;
+  const visible = filterFn ? sorted.filter(filterFn) : sorted;
+  let list: React.ReactNode = <div className="list-grid">{visible.map(renderItem)}</div>;
   if (groupBy === 'date-year') {
     const groups = new Map<string, AnyItem[]>();
-    for (const item of sorted) {
+    for (const item of visible) {
       const year = item.happenedOn && typeof item.happenedOn === 'string' ? item.happenedOn.slice(0, 4) : 'No date yet';
       const arr = groups.get(year) ?? [];
       arr.push(item);
@@ -184,9 +233,9 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
   } else if (groupBy === 'letter-state') {
     const now = new Date().toISOString();
     const groups: { key: string; label: string; note: string; items: AnyItem[] }[] = [
-      { key: 'sealed', label: 'Sealed letters', note: 'Scheduled letters, still sealed until their release date.', items: sorted.filter((i) => i.visibility === 'scheduled' && i.revealAt && (i.revealAt as string) > now) },
-      { key: 'shared', label: 'Shared letters', note: 'Open letters both partners can read.', items: sorted.filter((i) => i.visibility === 'shared' || (i.visibility === 'scheduled' && !(i.revealAt && (i.revealAt as string) > now))) },
-      { key: 'private', label: 'Private drafts', note: 'Visible only to their author.', items: sorted.filter((i) => i.visibility === 'private_draft') },
+      { key: 'sealed', label: 'Sealed letters', note: 'Scheduled letters, still sealed until their release date.', items: visible.filter((i) => i.visibility === 'scheduled' && i.revealAt && (i.revealAt as string) > now) },
+      { key: 'shared', label: 'Shared letters', note: 'Open letters both partners can read.', items: visible.filter((i) => i.visibility === 'shared' || (i.visibility === 'scheduled' && !(i.revealAt && (i.revealAt as string) > now))) },
+      { key: 'private', label: 'Private drafts', note: 'Visible only to their author.', items: visible.filter((i) => i.visibility === 'private_draft') },
     ];
     list = <>{groups.filter((g) => g.items.length > 0).map((g) => (
       <section key={g.key} className="pigeonhole">
@@ -198,10 +247,11 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
   }
   return (
     <Page title={title} subtitle={subtitle} backHome className={pageCls}>
-      {createFields.length > 0 && <CreateForm fields={createFields} onCreate={async (v) => { await onCreate(space.id, v); await refresh(); }} />}
+      {headerExtra}
+      {createFields.length > 0 && <CreateForm fields={createFields} onCreate={async (v) => { await onCreate(space.id, v); await refresh(); onCreated?.(); }} />}
       {error ? <ErrorState message={error} onRetry={refresh} />
         : loading ? <LoadingState />
-        : sorted.length === 0 ? <EmptyState />
+        : visible.length === 0 ? <EmptyState title={emptyTitle} message={emptyMessage} />
         : list}
     </Page>
   );
@@ -258,8 +308,10 @@ function UploadForm({ linkedType, linkedId, onDone }: { linkedType: string; link
 export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
   return (
     <ListPage
-      me={me} space={space} plural="memories" singular="memory" layout="scrapbook" groupBy="date-year"
-      title="Memory Wall" subtitle="A layered scrapbook. Photos are pinned here by both of you; nothing here is sample content."
+      me={me} space={space} plural="memories" singular="memory" layout="scrapbook" groupBy="date-year" polaroidMode
+      title="Memory Wall" subtitle="A layered scrapbook. Photos are pinned here by both of you; nothing here is sample content. Open a polaroid to read its story, and use the ticket stub to see its date at a glance."
+      emptyTitle="The scrapbook is blank — and that is an invitation"
+      emptyMessage="Pin your first memory below: a title, a handwritten caption, and the date it happened. Add a photo to it afterwards with the upload control on the card. Nothing here is pre-filled, so the first page will genuinely be yours."
       createFields={[
         { name: 'title', label: 'Title' },
         { name: 'caption', label: 'Caption', kind: 'textarea' },
@@ -280,13 +332,13 @@ export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
 export function LettersPage({ me, space }: { me: Me; space: Space }) {
   return (
     <ListPage
-      me={me} space={space} plural="letters" singular="letter" layout="post-office" groupBy="letter-state"
-      title="Letters — a little post office" subtitle="Private drafts stay visible only to their author. Scheduled letters stay sealed until their release date, judged by the server's clock, not yours."
+      me={me} space={space} plural="letters" singular="letter" layout="post-office" groupBy="letter-state" envelopeMode
+      title="Letters — a little post office" subtitle="Private drafts stay visible only to their author. Scheduled letters stay sealed until their release date, judged by the server's clock, not yours. Open an envelope to unfold it — the fold is only an animation; who may read it is decided by the server."
       createFields={[
         { name: 'title', label: 'Title' },
         { name: 'body', label: 'Letter', kind: 'textarea' },
         { name: 'visibility', label: 'Kind', kind: 'select', options: ['shared', 'private_draft', 'scheduled'] },
-        { name: 'revealAt', label: 'Release date and time (for scheduled letters)' },
+        { name: 'revealAt', label: 'Release date and time (for scheduled letters)', kind: 'datetime-local' },
         { name: 'memoryId', label: 'Link to a memory (optional — paste a memory id)', kind: 'text' },
       ]}
       onCreate={async (spaceId, v) => {
@@ -306,8 +358,20 @@ export function LettersPage({ me, space }: { me: Me; space: Space }) {
 export function QuietPage({ me, space }: { me: Me; space: Space }) {
   const { items, error, loading, refresh } = useList(space.id, 'journals');
   const [breathingOn, setBreathingOn] = useState(true);
+  const [rainOn, setRainOn] = useState(true);
+  const [moodFilter, setMoodFilter] = useState('');
+  const moods = Array.from(new Set(items.map((i) => (i.mood as string) ?? '').filter(Boolean)));
+  const shown = moodFilter ? items.filter((i) => (i.mood as string) === moodFilter) : items;
   return (
     <Page title="Quiet Room" subtitle="A calm corner. Journals here are private to their author — your partner cannot see them, count them, or guess their titles. No streaks, no scores, no pressure." backHome className="layout-quiet">
+      <div className="quiet-scene" aria-label="A peaceful illustrated room with a window, rain, warm lamplight, and a comfortable chair">
+        <div className="quiet-window" aria-hidden="true">{rainOn && <div className="quiet-rain" />}</div>
+        <div className="quiet-lamp" aria-hidden="true" />
+        <div className="quiet-chair" aria-hidden="true" />
+      </div>
+      <div className="chip-row" role="group" aria-label="Rain">
+        <button className="chip" type="button" aria-pressed={rainOn} onClick={() => setRainOn(!rainOn)}>{rainOn ? 'Rain on — turn it off' : 'Rain off — turn it on'}</button>
+      </div>
       <div className="breathing-wrap">
         {breathingOn && <div className="breathing-circle" aria-hidden="true" />}
         <p>Breathe in, breathe out. There is no timer here and nothing to complete — stop whenever you like.</p>
@@ -320,12 +384,20 @@ export function QuietPage({ me, space }: { me: Me; space: Space }) {
         { name: 'body', label: 'Journal entry', kind: 'textarea' },
         { name: 'mood', label: 'Mood (optional)' },
       ]} onCreate={async (v) => { await api(`/spaces/${space.id}/journals`, { method: 'POST', body: v }); await refresh(); }} />
+      {moods.length > 0 && (
+        <div className="chip-row" role="group" aria-label="Filter journals by mood">
+          <button className={`chip${!moodFilter ? ' active' : ''}`} type="button" onClick={() => setMoodFilter('')}>All moods</button>
+          {moods.map((m) => (
+            <button key={m} className={`chip${moodFilter === m ? ' active' : ''}`} type="button" onClick={() => setMoodFilter(m)}>{m}</button>
+          ))}
+        </div>
+      )}
       {error ? <ErrorState message={error} onRetry={refresh} />
         : loading ? <LoadingState />
-        : items.length === 0 ? <EmptyState title="No journal entries yet" />
-        : <div className="list-grid">{items.map((item) => <ItemCard key={item.id} item={item} singular="journal" me={me} onRefresh={refresh} />)}</div>}
+        : shown.length === 0 ? <EmptyState title="No journal entries yet" message="This room is empty on purpose — write the first private entry above when you want to. It stays yours alone, and nothing here counts, scores, or streaks it." />
+        : <div className="list-grid">{shown.map((item) => <ItemCard key={item.id} item={item} singular="journal" me={me} onRefresh={refresh} />)}</div>}
       <section style={{ marginTop: '3rem' }}>
-        <h2>Voice notes</h2>
+        <h2>Comforting notes</h2>
         <p>Saved comforting voice notes. Upload an audio file to a voice note you create below.</p>
         <VoiceNotes space={space} />
       </section>
@@ -360,31 +432,38 @@ function VoiceNotes({ space }: { space: Space }) {
 
 export function AppreciationsPage({ me, space }: { me: Me; space: Space }) {
   const [random, setRandom] = useState<AnyItem | null>(null);
+  const [kindFilter, setKindFilter] = useState('');
+  const { items, error, loading, refresh } = useList(space.id, 'appreciations');
+  const shown = kindFilter ? items.filter((i) => (i.kind as string) === kindFilter) : items;
   return (
-    <div>
-      <ListPage
-        me={me} space={space} plural="appreciations" singular="appreciation" layout="gallery"
-        title="Things I See in You" subtitle="A gallery of little things — appreciations and moments of courage. Nothing here is scored or ranked."
-        createFields={[
-          { name: 'text', label: 'Note', kind: 'textarea' },
-          { name: 'kind', label: 'Kind', kind: 'select', options: ['appreciation', 'achievement'] },
-          { name: 'forName', label: 'For (name)' },
-        ]}
-        onCreate={async (spaceId, v) => { await api(`/spaces/${spaceId}/appreciations`, { method: 'POST', body: v }); }}
-      />
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 1rem 4rem' }}>
+    <Page title="Things I See in You" subtitle="A gallery of little things — appreciations and moments of courage. Nothing here is scored or ranked. Open a card to revisit it in full." backHome className="layout-gallery">
+      <CreateForm fields={[
+        { name: 'text', label: 'Note', kind: 'textarea' },
+        { name: 'kind', label: 'Kind', kind: 'select', options: ['appreciation', 'achievement'] },
+        { name: 'forName', label: 'For (name)' },
+      ]} onCreate={async (v) => { await api(`/spaces/${space.id}/appreciations`, { method: 'POST', body: v }); await refresh(); }} />
+      <div className="chip-row" role="group" aria-label="Filter cards by kind">
+        <button className={`chip${!kindFilter ? ' active' : ''}`} type="button" onClick={() => setKindFilter('')}>All cards</button>
+        <button className={`chip${kindFilter === 'appreciation' ? ' active' : ''}`} type="button" onClick={() => setKindFilter('appreciation')}>Appreciations</button>
+        <button className={`chip${kindFilter === 'achievement' ? ' active' : ''}`} type="button" onClick={() => setKindFilter('achievement')}>Achievements</button>
+      </div>
+      {error ? <ErrorState message={error} onRetry={refresh} />
+        : loading ? <LoadingState />
+        : shown.length === 0 ? <EmptyState title="No cards yet" message="This gallery starts empty on purpose. Write the first card above — a quality you admire, a moment of courage, a small thing that mattered. No scores, no rankings, just cards to come back to." />
+        : <div className="list-grid">{shown.map((item) => <ItemCard key={item.id} item={item} singular="appreciation" me={me} onRefresh={refresh} galleryMode />)}</div>}
+      <div style={{ marginTop: '2rem' }}>
         <button className="btn secondary" onClick={async () => { const r = await api<AnyItem | null>(`/spaces/${space.id}/appreciations/random`); setRandom(r); }}>Show me a random card</button>
         {random && <div style={{ marginTop: '1rem' }}><Card><p>{random.text as string}</p><p><small>For {random.forName as string}</small></p></Card></div>}
         <p><Link to="/appreciations/favourites">Revisit favourite cards →</Link></p>
       </div>
-    </div>
+    </Page>
   );
 }
 
 export function FavouritesPage({ me, space }: { me: Me; space: Space }) {
   return (
     <ListPage
-      me={me} space={space} plural="appreciations" singular="appreciation" layout="gallery"
+      me={me} space={space} plural="appreciations" singular="appreciation" layout="gallery" galleryMode
       title="Favourite cards" subtitle="Cards you marked as favourites."
       createFields={[]}
       onCreate={async () => undefined}
@@ -394,30 +473,82 @@ export function FavouritesPage({ me, space }: { me: Me; space: Space }) {
 }
 
 export function FuturePage({ me, space }: { me: Me; space: Space }) {
+  const [category, setCategory] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { items: mapPlans, refresh: refreshMap } = useList(space.id, 'plans');
+  const { items: memories, refresh: refreshMemories } = useList(space.id, 'memories');
+  const selected = mapPlans.find((p) => p.id === selectedId) ?? null;
+  const keepsakeFor = (planId: string) => memories.find((m) => (m.sourcePlanId as string) === planId);
+  const categories = ['trip', 'date', 'meal', 'activity', 'home', 'other'];
   return (
-    <ListPage
-      me={me} space={space} plural="plans" singular="plan" layout="journey" sortByTargetDate
-      title="Our Future — an adventure map" subtitle="Plans are drawn as journeys, not checklists. Completing one can create a scrapbook memory in the same step, so it is never duplicated."
-      createFields={[
-        { name: 'title', label: 'Title' },
-        { name: 'detail', label: 'Notes', kind: 'textarea' },
-        { name: 'category', label: 'Category', kind: 'select', options: ['trip', 'date', 'meal', 'activity', 'home', 'other'] },
-        { name: 'targetDate', label: 'Target date', kind: 'date' },
-        { name: 'location', label: 'Location (optional)' },
-      ]}
-      onCreate={async (spaceId, v) => { await api(`/spaces/${spaceId}/plans`, { method: 'POST', body: { title: v.title, detail: v.detail ?? '', category: v.category || 'other', targetDate: v.targetDate || null, location: v.location ?? '' } }); }}
-      extraForItem={(item, refresh) => (
-        <>
+    <div>
+      <ListPage
+        me={me} space={space} plural="plans" singular="plan" layout="journey" sortByTargetDate
+        title="Our Future — an adventure map" subtitle="Plans are drawn as journeys, not checklists. Tap an island on the map to open its quest card. Completing one can create a scrapbook memory in the same step, so it is never duplicated."
+        headerExtra={(
+          <div>
+            <div className="future-map" aria-label="An illustrated adventure map with a winding path, islands, and food stalls">
+              <svg viewBox="0 0 600 60" aria-hidden="true" style={{ width: '100%', height: 60 }}>
+                <path d="M10 30 Q 110 5 210 30 T 410 30 T 590 30" fill="none" stroke="#c07856" strokeWidth="3" strokeDasharray="8 6" />
+                <circle cx="60" cy="28" r="10" fill="#7d8b6a" /><circle cx="300" cy="28" r="10" fill="#c48b8b" /><circle cx="520" cy="28" r="10" fill="#f6d87a" />
+                <text x="60" y="52" textAnchor="middle" fontSize="11">island</text>
+                <text x="300" y="52" textAnchor="middle" fontSize="11">food stall</text>
+                <text x="520" y="52" textAnchor="middle" fontSize="11">destination</text>
+              </svg>
+              <div className="chip-row" style={{ marginBottom: 0 }}>
+                {mapPlans.length === 0 ? <p style={{ margin: 0 }}><small>No destinations on the map yet — add the first quest card below.</small></p> : mapPlans.map((p) => (
+                  <button key={p.id} className={`map-island${selectedId === p.id ? ' selected' : ''}`} type="button" onClick={() => setSelectedId(p.id)}>
+                    {(p.title as string) ?? 'Quest'}
+                  </button>
+                ))}
+              </div>
+              {selected && (
+                <div className="detail-panel">
+                  <h3 style={{ marginTop: 0 }}>{selected.title as string}</h3>
+                  <p>{selected.detail as string}</p>
+                  <p><small>{(selected.category as string) ?? ''}{selected.location ? ` · ${selected.location as string}` : ''}{selected.targetDate ? ` · planned for ${fmtDate(selected.targetDate)}` : ''} · status: {(selected.status as string) ?? 'planned'}</small></p>
+                  {selected.status === 'done' && keepsakeFor(selected.id) ? (
+                    <p><Link to="/memories">View its Memory Wall keepsake →</Link></p>
+                  ) : selected.status === 'done' ? (
+                    <p><small>Completed without a keepsake — complete a future quest with the keepsake box ticked to link it here.</small></p>
+                  ) : null}
+                </div>
+              )}
+            </div>
+            <div className="chip-row" role="group" aria-label="Filter quests by category">
+              <button className={`chip${!category ? ' active' : ''}`} type="button" onClick={() => setCategory('')}>All quests</button>
+              {categories.map((c) => (
+                <button key={c} className={`chip${category === c ? ' active' : ''}`} type="button" onClick={() => setCategory(c)}>{c}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        filterFn={category ? (i) => (i.category as string) === category : undefined}
+        onCreated={refreshMap}
+        createFields={[
+          { name: 'title', label: 'Title' },
+          { name: 'detail', label: 'Notes', kind: 'textarea' },
+          { name: 'category', label: 'Category', kind: 'select', options: ['trip', 'date', 'meal', 'activity', 'home', 'other'] },
+          { name: 'targetDate', label: 'Target date', kind: 'date' },
+          { name: 'location', label: 'Location (optional)' },
+        ]}
+        onCreate={async (spaceId, v) => { await api(`/spaces/${spaceId}/plans`, { method: 'POST', body: { title: v.title, detail: v.detail ?? '', category: v.category || 'other', targetDate: v.targetDate || null, location: v.location ?? '' } }); }}
+        extraForItem={(item, refresh) => (
+          <>
             <p><span className="journey-category">{(item.category as string) ?? 'other'}</span>{item.location ? <span> · {item.location as string}</span> : null}</p>
             {item.status === 'planned' ? (
-          <form onSubmit={async (e) => { e.preventDefault(); const form = e.target as HTMLFormElement; const createMemory = (form.elements.namedItem('createMemory') as HTMLInputElement).checked; await api(`/plan/${item.id}/complete`, { method: 'POST', body: { createMemory, memoryTitle: item.title as string } }); refresh(); }}>
-            <label><input type="checkbox" name="createMemory" defaultChecked /> Also create a Memory Wall keepsake</label>{' '}
-            <button className="btn secondary" type="submit">Mark complete ✓</button>
-          </form>
-        ) : <p><span className="completed-stamp">Completed</span></p>}
+              <form onSubmit={async (e) => { e.preventDefault(); const form = e.target as HTMLFormElement; const createMemory = (form.elements.namedItem('createMemory') as HTMLInputElement).checked; const caption = (form.elements.namedItem('memoryCaption') as HTMLInputElement).value; await api(`/plan/${item.id}/complete`, { method: 'POST', body: { createMemory, memoryTitle: item.title as string, memoryCaption: caption } }); refresh(); refreshMemories(); }}>
+                <label><input type="checkbox" name="createMemory" defaultChecked /> Also create a Memory Wall keepsake</label>{' '}
+                <FormField label="Keepsake caption (optional)"><input className="field" name="memoryCaption" /></FormField>
+                <button className="btn secondary" type="submit">Mark complete ✓</button>
+              </form>
+            ) : (
+              <p><span className="completed-stamp">Completed</span>{keepsakeFor(item.id) ? <span> · <Link to="/memories">View its Memory Wall keepsake →</Link></span> : null}</p>
+            )}
           </>
-      )}
-    />
+        )}
+      />
+    </div>
   );
 }
 

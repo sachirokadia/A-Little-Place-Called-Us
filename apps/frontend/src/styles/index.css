@@ -282,6 +282,171 @@ label { display: block; font-size: 0.9rem; margin-bottom: var(--space-1); }
   background: var(--paper);
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
+
+/* Phase 3 — distinct room compositions. All decorative scenery is
+   aria-hidden; every interactive element remains a real button/link. */
+
+/* Memory Wall: ticket stubs under each polaroid, handwritten caption. */
+.ticket-stub {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.25rem;
+  padding: 0.3rem 0.6rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  background: var(--paper-warm);
+}
+.polaroid-caption {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1.05rem;
+}
+.detail-panel {
+  border-top: 1px solid var(--line);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+/* Letters: envelope body unfolds instead of appearing instantly. */
+.layout-post-office form.paper { border: 2px solid var(--wood); background: var(--paper-warm); }
+.envelope-body {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition: max-height 500ms ease, opacity 400ms ease, visibility 500ms;
+}
+.envelope-open .envelope-body {
+  max-height: 1200px;
+  opacity: 1;
+  visibility: visible;
+  animation: unfold 500ms ease;
+}
+@keyframes unfold {
+  from { transform: perspective(600px) rotateX(-18deg); transform-origin: top; }
+  to { transform: perspective(600px) rotateX(0deg); transform-origin: top; }
+}
+.writing-desk {
+  border: 2px solid var(--wood);
+  background: var(--paper-warm);
+}
+
+/* Quiet Room: illustrated room — window, rain, lamplight, chair. */
+.quiet-scene {
+  position: relative;
+  height: 190px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #eef3e6;
+  overflow: hidden;
+  margin-bottom: var(--space-5);
+}
+.quiet-window {
+  position: absolute;
+  left: 12%;
+  top: 14%;
+  width: 34%;
+  height: 62%;
+  background: #dbe7ec;
+  border: 6px solid var(--wood);
+  border-radius: 0.25rem;
+}
+.quiet-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 48%, var(--wood) 48%, var(--wood) 52%, transparent 52%),
+    linear-gradient(to right, transparent 48%, var(--wood) 48%, var(--wood) 52%, transparent 52%);
+}
+.quiet-rain {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-image: repeating-linear-gradient(105deg, transparent 0 14px, rgba(90, 120, 140, 0.55) 14px 15px);
+  animation: rain-fall 1.2s linear infinite;
+}
+@keyframes rain-fall {
+  from { background-position: 0 -40px; }
+  to { background-position: 40px 40px; }
+}
+.quiet-lamp {
+  position: absolute;
+  right: 14%;
+  top: 18%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #f6d87a;
+  box-shadow: 0 0 42px 18px rgba(246, 216, 122, 0.55);
+}
+.quiet-chair {
+  position: absolute;
+  right: 20%;
+  bottom: 8%;
+  width: 90px;
+  height: 72px;
+  background: var(--rose);
+  border-radius: 0.75rem 0.75rem 0.25rem 0.25rem;
+}
+.quiet-chair::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -14px;
+  height: 14px;
+  background: var(--wood);
+  border-radius: 0.25rem;
+}
+
+/* Appreciations: quality chips and a collectible card back. */
+.chip-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.chip {
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+}
+.chip.active { background: var(--sage); color: #fff; border-color: var(--sage); }
+.quality-badge {
+  display: inline-block;
+  background: var(--rose-soft);
+  border: 1px solid #e8b4a8;
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* Future: illustrated map strip with a winding path and islands. */
+.future-map {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #eef3e6;
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  overflow-x: auto;
+}
+.map-island {
+  border: 2px solid var(--wood);
+  background: var(--paper);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+.map-island.selected { background: var(--terracotta); color: #fff; border-color: var(--terracotta-deep); }
+
+@media (prefers-reduced-motion: reduce) {
+  .envelope-body, .envelope-open .envelope-body { transition: none; animation: none; }
+  .quiet-rain { animation: none; }
+}
 .cottage-destinations {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
