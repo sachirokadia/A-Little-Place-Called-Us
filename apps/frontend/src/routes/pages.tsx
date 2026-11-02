@@ -670,9 +670,9 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
   // Gift first-visit entrance (Phase 7). Deliberately separate from the
   // Home intro above (lp-intro-dismissed) and from /welcome onboarding
   // (server onboardingSeen): it is a device-local, always-skippable
-  // entrance only, it never gates any room, and it never mentions the
-  // brass-star trail or any ending — the recipient discovers the world
-  // by exploring. Reopening it from Home is for that visit only; the
+  // entrance only, it never gates any room, and it says nothing beyond
+  // the rooms themselves — the recipient discovers the world by
+  // exploring. Reopening it from Home is for that visit only; the
   // stored flag still makes the next visit skip it.
   const [giftOpen, setGiftOpen] = useState(() => {
     try { return localStorage.getItem('lp-gift-intro-seen') !== '1'; } catch { return true; }
@@ -731,12 +731,28 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
     return (
       <div className="page">
         <section className={styles.gift} aria-label="A first-visit entrance to this little world">
-          <p className={styles.giftEyebrow}>A little place, made for two</p>
+          <div className={styles.giftVignette} aria-hidden="true">
+            <div className={styles.sky}>
+              <div className={styles.sun} />
+              <div className={styles.cloud} />
+            </div>
+            <div className={styles.giftGround} />
+            <div className={styles.giftCottage}>
+              <div className={styles.roof} />
+              <div className={styles.house}>
+                <div className={styles.window} />
+                <div className={styles.door}>⌂</div>
+                <div className={styles.window} />
+              </div>
+            </div>
+          </div>
           <h1 className={styles.giftTitle}>A Little Place Called Us</h1>
-          <blockquote className={styles.giftLine}>“Somewhere in this little world, I've kept the things I wish you could see through my eyes.”</blockquote>
-          <p className={styles.giftNote}>Inside there are rooms to wander — a scrapbook, a post office, a quiet corner, a gallery, a map of days ahead, and a little arcade. Wander in any order, and take your time. This world is for exploring, not for finishing.</p>
+          <p className={styles.giftTagline}>A little world, made of our memories, our letters, and all the days still waiting for us.</p>
+          <p className={styles.giftHandNote}>I made a little place for all the things I never want us to forget.</p>
+          <p className={styles.giftSecondary}>Somewhere in this little world, I've kept the things I wish you could see through my eyes.</p>
+          <p className={styles.giftRooms}>Rooms to wander, in any order, whenever you like.</p>
           <div className={styles.giftActions}>
-            <button className="btn" type="button" onClick={dismissGift}>Step inside</button>
+            <button className="btn" type="button" onClick={dismissGift}>Come on in.</button>
             <button className="btn quiet" type="button" onClick={dismissGift}>Skip</button>
           </div>
           <p className={styles.giftSmall}>You can see this entrance again any time from the Home page.</p>

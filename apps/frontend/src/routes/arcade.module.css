@@ -225,6 +225,40 @@
   background: #f1eaff;
 }
 
+/* Final star letter — a storybook paper page, not a modal or marketing
+   section. Serif text on paper, comfortable line length and contrast. */
+.letterPage {
+  background: #fdf8ec;
+  border: 2px solid #1d1430;
+  border-radius: 0.25rem;
+  box-shadow: 0 4px 0 rgba(29, 20, 48, 0.15);
+  padding: 1.5rem 1.25rem;
+  margin: 1rem 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: #2b2118;
+}
+
+.letterParagraph {
+  max-width: 62ch;
+  margin: 0 0 1rem;
+}
+
+.letterParagraph:last-child { margin-bottom: 0; }
+
+/* Gentle paper opening: a slow unfold/fade only — no bounce, no spin. */
+.letterOpen {
+  animation: letterUnfold 0.9s ease-out both;
+  transform-origin: top center;
+}
+
+@keyframes letterUnfold {
+  from { opacity: 0; transform: translateY(12px) scaleY(0.97); }
+  to { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .confetti span { animation: none; }
+  .letterOpen { animation: none; }
 }

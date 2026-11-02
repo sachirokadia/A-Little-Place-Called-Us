@@ -8,6 +8,7 @@ import {
   MYSTERY_OPTIONS, MYSTERY_SOLUTION_ID, QUIZ_QUESTIONS, UNLOCKABLES, UNLOCK_KEYS,
   type UnlockKey,
 } from './arcade-data.js';
+import { FINAL_LETTER_PARAGRAPHS } from './final-letter.js';
 
 // ---------------------------------------------------------------------------
 // Progress persistence: server first, localStorage fallback second.
@@ -701,6 +702,11 @@ export function ArcadeContent({ space }: { space: Space }) {
       scrollToSection('star-message');
     }
   }, [starRevealed]);
+  // Letter replay: re-triggers ONLY the CSS opening animation by changing
+  // the letter element's key. It writes nothing (no localStorage, no API)
+  // and changes no unlock/star/progress state.
+  const [letterReplayKey, setLetterReplayKey] = useState(0);
+  const replayLetter = () => setLetterReplayKey((k) => k + 1);
 
   const openStar = () => {
     try { localStorage.setItem('lp-hidden-step', 'arcade'); } catch { /* ignore */ }
@@ -794,8 +800,15 @@ export function ArcadeContent({ space }: { space: Space }) {
         {starRevealed && (
           <section className={styles.section} id="star-message" tabIndex={-1} aria-labelledby="star-message-heading">
             <h2 id="star-message-heading">The final star message</h2>
-            <p><strong>Sample star message (placeholder — replace with a real message later)</strong></p>
-            <p>[A short message can go here later. This is a sample placeholder only — it is not written in anyone&apos;s voice, and it does not describe any real moment.]</p>
+            <p>Draft letter — to be personalised by its author later</p>
+            <div key={letterReplayKey} className={`${styles.letterPage} ${styles.letterOpen}`}>
+              {FINAL_LETTER_PARAGRAPHS.map((paragraph, i) => (
+                <p key={i} className={styles.letterParagraph}>{paragraph}</p>
+              ))}
+            </div>
+            <p>
+              <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={replayLetter}>Read it again</button>
+            </p>
             <p><Link to="/">Back to Home →</Link></p>
           </section>
         )}
