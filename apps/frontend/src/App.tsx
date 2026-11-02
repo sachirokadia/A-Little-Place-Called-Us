@@ -28,6 +28,7 @@ function Nav({ me, space }: { me: Me | null; space: Space | null }) {
       ))}
       <span className="nav-meta">
         {space ? <span>{space.name} · </span> : null}
+        <NavLink to="/deleted" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>Deleted</NavLink>
         <NavLink to="/settings" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>Settings</NavLink>
       </span>
     </nav>

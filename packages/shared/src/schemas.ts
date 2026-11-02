@@ -83,6 +83,11 @@ export const planUpdateSchema = z.object({
   category: planCategory.optional(),
   targetDate: isoDate.nullable().optional(),
   location: z.string().trim().max(200).optional(),
+  // 'status' must be declared here or validation strips it before the
+  // handler ever sees it — which previously made PATCH {status:'done'}
+  // return 200 while silently ignoring the field. Any supplied value
+  // is rejected with a 400 pointing at the complete endpoint.
+  status: z.string().optional().refine((v) => v === undefined, { message: 'Use the complete endpoint to mark a plan done' }),
 });
 export const planCompleteSchema = z.object({
   createMemory: z.boolean().optional().default(false),
@@ -95,6 +100,9 @@ export const reminderCreateSchema = z.object({ text: shortText, kind: reminderKi
 export const reminderUpdateSchema = reminderCreateSchema.partial();
 
 export const voiceNoteCreateSchema = z.object({ title });
+// Update reuses the create schema in content.ts, which made 'title'
+// required on every PATCH. Updates should accept a partial title.
+export const voiceNoteUpdateSchema = z.object({ title: title.optional() });
 
 export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),

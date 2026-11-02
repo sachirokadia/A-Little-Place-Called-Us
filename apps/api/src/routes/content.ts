@@ -4,7 +4,7 @@ import {
   appreciationCreateSchema, appreciationUpdateSchema, journalCreateSchema, journalUpdateSchema,
   letterCreateSchema, letterUpdateSchema, memoryCreateSchema, memoryUpdateSchema,
   paginationSchema, planCompleteSchema, planCreateSchema, planUpdateSchema,
-  reminderCreateSchema, reminderUpdateSchema, voiceNoteCreateSchema,
+  reminderCreateSchema, reminderUpdateSchema, voiceNoteCreateSchema, voiceNoteUpdateSchema,
 } from '@little-place/shared';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
@@ -66,7 +66,14 @@ function serialize(kind: ContentKind, row: Record<string, unknown>, viewerId: st
 // Visibility predicate (spec §3.4), built into the query itself.
 function visibilityWhere(kind: ContentKind, spaceId: string, viewerId: string, deleted: boolean): Record<string, unknown> {
   const base: Record<string, unknown> = { spaceId, deletedAt: deleted ? { not: null } : null };
-  if (kind === 'journal') return { ...base, authorId: viewerId };
+  // Journals AND voice notes are author-only. Voice notes were
+  // previously space-visible while the export deliberately excluded
+  // them entirely — that inconsistency is resolved in favour of
+  // privacy (fail closed): a voice note is a personal Quiet Room
+  // recording, like a journal, not a shared record. If the product
+  // ever wants shared voice notes, that is a deliberate product
+  // decision, not a silent default.
+  if (kind === 'journal' || kind === 'voiceNote') return { ...base, authorId: viewerId };
   if (kind === 'letter') {
     // Partner sees: own rows (any visibility), shared rows, and
     // scheduled rows whose reveal time has passed. Undelivered
@@ -223,6 +230,16 @@ function makeRoutes(kind: ContentKind, createSchema: ZodSchema<unknown>, updateS
         throw badRequest('Use the complete endpoint to mark a plan done');
       }
       const body = req.body as Record<string, unknown>;
+      // A letter moved to 'scheduled' must end up with a revealAt.
+      // The schema only blocks an explicit null, so a PATCH that sets
+      // visibility without revealAt on a letter that had none used to
+      // reach the DB CHECK as a generic 500. Resolve the final values
+      // against the existing row and reject with a 400 instead.
+      if (kind === 'letter') {
+        const finalVisibility = (body.visibility as string | undefined) ?? (row as { visibility: string }).visibility;
+        const finalRevealAt = 'revealAt' in body ? body.revealAt : (row as { revealAt: unknown }).revealAt;
+        if (finalVisibility === 'scheduled' && !finalRevealAt) throw badRequest('A scheduled letter requires revealAt');
+      }
       const data: Record<string, unknown> = { ...body };
       if (kind === 'letter' && body.revealAt) data.revealAt = new Date(body.revealAt as string);
       if (kind === 'memory' && body.happenedOn) data.happenedOn = new Date(body.happenedOn as string);
@@ -345,7 +362,7 @@ makeRoutes('journal', journalCreateSchema, journalUpdateSchema);
 makeRoutes('appreciation', appreciationCreateSchema, appreciationUpdateSchema);
 makeRoutes('plan', planCreateSchema, planUpdateSchema);
 makeRoutes('reminder', reminderCreateSchema, reminderUpdateSchema);
-makeRoutes('voiceNote', voiceNoteCreateSchema, voiceNoteCreateSchema);
+makeRoutes('voiceNote', voiceNoteCreateSchema, voiceNoteUpdateSchema);
 
 // Plan completion — the ONLY path to done, in one transaction with
 // optional linked-memory creation (spec §3.5). Unique sourcePlanId

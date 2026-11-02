@@ -41,6 +41,10 @@ mediaRouter.post('/spaces/:spaceId/media', upload.single('file'), async (req, re
     if (!['memory', 'plan', 'voiceNote'].includes(linkedType) || !linkedId) throw badRequest('Invalid linked item');
     const { row } = await loadLinkedItem(linkedType, linkedId);
     if (!row || (row as { spaceId: string }).spaceId !== spaceId || (row as { deletedAt: Date | null }).deletedAt) throw notFound();
+    // Upload is author-only (spec §3.4: partner may view a visible item,
+    // but only its author uploads to it). Edit/delete were already
+    // author-only; upload was the one route that only checked membership.
+    if ((row as { authorId: string }).authorId !== req.user.id) throw notFound();
     const file = req.file;
     if (!file) throw badRequest('No file uploaded');
     const isImage = ALLOWED_IMAGE_TYPES.includes(file.mimetype);
@@ -70,12 +74,15 @@ mediaRouter.post('/spaces/:spaceId/media', upload.single('file'), async (req, re
 });
 
 // List assets for a linked item (member only, item not deleted).
+// Voice notes are author-only (like journals): a partner listing a
+// voice note's assets gets the same generic 404 as for a journal.
 mediaRouter.get('/media/for/:linkedType/:linkedId', async (req, res, next) => {
   try {
     if (!req.user) throw unauthorized();
     const { linkedType, linkedId } = req.params;
     const { row } = await loadLinkedItem(linkedType ?? '', linkedId ?? '');
     if (!row || (row as { deletedAt: Date | null }).deletedAt) throw notFound();
+    if (linkedType === 'voiceNote' && (row as { authorId: string }).authorId !== req.user.id) throw notFound();
     await requireSpaceMember(req.user.id, (row as { spaceId: string }).spaceId);
     const where = linkedType === 'memory' ? { memoryId: linkedId } : linkedType === 'plan' ? { planId: linkedId } : { voiceNoteId: linkedId };
     const assets = await prisma.mediaAsset.findMany({ where: { ...where, status: 'active' }, orderBy: { createdAt: 'asc' } });
@@ -109,6 +116,7 @@ mediaRouter.get('/media/:id', async (req, res, next) => {
     } else if (asset.voiceNoteId) {
       const item = await prisma.voiceNote.findUnique({ where: { id: asset.voiceNoteId } });
       if (!item || item.deletedAt) throw notFound();
+      if (item.authorId !== req.user.id) throw notFound();
       spaceId = item.spaceId;
     }
     if (!spaceId) throw notFound();

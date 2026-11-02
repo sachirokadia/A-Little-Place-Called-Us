@@ -87,7 +87,10 @@ function ItemCard({ item, singular, me, onRefresh, extra, envelopeMode, polaroid
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const isAuthor = item.authorId === me.id;
-  const title = (item.title as string) ?? (item.text as string) ?? '';
+  // Gallery cards have no title: falling back to the note text made
+  // the heading and the card body render the same text twice. In
+  // gallery mode the heading is the recipient instead.
+  const title = (item.title as string) ?? (galleryMode && item.forName ? `For ${item.forName as string}` : (item.text as string) ?? '');
   if (editing) return <Card><EditForm item={item} singular={singular} onDone={() => { setEditing(false); onRefresh(); }} onCancel={() => setEditing(false)} /></Card>;
   const bodyText = (item.body as string) ?? '';
   const storyText = (item.story as string) ?? '';
@@ -164,6 +167,14 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (submitting || inFlightRef.current) return;
+    // An entirely blank submit used to reach the server and fail with
+    // a cryptic "Invalid request" (or look like a silent no-op). Say
+    // so plainly instead, before any request is made.
+    if (fields.every((f) => !(values[f.name] ?? '').trim())) {
+      setError('Please add something before saving — a title, a note, or a story.');
+      setSaved(false);
+      return;
+    }
     setError(null);
     setSaved(false);
     inFlightRef.current = true;
@@ -241,7 +252,7 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
     const isPrivate = item.visibility === 'private_draft';
     const cls = isSealed ? 'envelope envelope-sealed' : isPrivate ? 'envelope envelope-private' : 'envelope';
     const badge = isSealed ? <span className="seal">Sealed</span> : isPrivate ? <span className="seal seal-private">Private draft — only you can see this</span> : <span className="seal seal-shared">Shared</span>;
-    return <div key={item.id} className={cls}>{badge}{card}</div>;
+    return <div key={item.id} className={cls}><div className="envelope-head">{badge}<span className="stamp" aria-hidden="true">POST</span></div>{card}</div>;
   };
   const pageCls = [pageClassName, layout ? `layout-${layout}` : ''].filter(Boolean).join(' ') || undefined;
   const visible = filterFn ? sorted.filter(filterFn) : sorted;
@@ -357,7 +368,7 @@ export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
       extraForItem={(item, refresh) => (
         <div>
           <MediaStrip linkedType="memory" linkedId={item.id} />
-          <UploadForm linkedType="memory" linkedId={item.id} onDone={refresh} />
+          {item.authorId === me.id ? <UploadForm linkedType="memory" linkedId={item.id} onDone={refresh} /> : null}
         </div>
       )}
     />
