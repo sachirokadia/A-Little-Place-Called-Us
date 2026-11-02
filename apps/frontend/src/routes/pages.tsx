@@ -667,6 +667,20 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
     setIntroDismissed(true);
     setIntroOpen(false);
   };
+  // Gift first-visit entrance (Phase 7). Deliberately separate from the
+  // Home intro above (lp-intro-dismissed) and from /welcome onboarding
+  // (server onboardingSeen): it is a device-local, always-skippable
+  // entrance only, it never gates any room, and it never mentions the
+  // brass-star trail or any ending — the recipient discovers the world
+  // by exploring. Reopening it from Home is for that visit only; the
+  // stored flag still makes the next visit skip it.
+  const [giftOpen, setGiftOpen] = useState(() => {
+    try { return localStorage.getItem('lp-gift-intro-seen') !== '1'; } catch { return true; }
+  });
+  const dismissGift = () => {
+    try { localStorage.setItem('lp-gift-intro-seen', '1'); } catch { /* ignore */ }
+    setGiftOpen(false);
+  };
   const [doorOpen, setDoorOpen] = useState(false);
   const destinations = [
     { to: '/memories', label: 'Memory Wall', note: 'Our scrapbook' },
@@ -713,6 +727,23 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
         : visibleFlowers < memoryCount
           ? `${visibleFlowers} flowers for ${memoryCount} memories.`
           : `${memoryCount} ${memoryCount === 1 ? 'flower' : 'flowers'} for ${memoryCount} ${memoryCount === 1 ? 'memory' : 'memories'}.`;
+  if (giftOpen) {
+    return (
+      <div className="page">
+        <section className={styles.gift} aria-label="A first-visit entrance to this little world">
+          <p className={styles.giftEyebrow}>A little place, made for two</p>
+          <h1 className={styles.giftTitle}>A Little Place Called Us</h1>
+          <blockquote className={styles.giftLine}>“Somewhere in this little world, I've kept the things I wish you could see through my eyes.”</blockquote>
+          <p className={styles.giftNote}>Inside there are rooms to wander — a scrapbook, a post office, a quiet corner, a gallery, a map of days ahead, and a little arcade. Wander in any order, and take your time. This world is for exploring, not for finishing.</p>
+          <div className={styles.giftActions}>
+            <button className="btn" type="button" onClick={dismissGift}>Step inside</button>
+            <button className="btn quiet" type="button" onClick={dismissGift}>Skip</button>
+          </div>
+          <p className={styles.giftSmall}>You can see this entrance again any time from the Home page.</p>
+        </section>
+      </div>
+    );
+  }
   return (
     <div className="page">
       {introOpen && (
@@ -782,7 +813,8 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
       </section>
       {!introOpen && (
         <button className={`btn quiet ${styles.revisit}`} type="button" onClick={() => setIntroOpen(true)}>Show the welcome again</button>
-      )}
+      )}{' '}
+      <button className={`btn quiet ${styles.revisit}`} type="button" onClick={() => setGiftOpen(true)}>See the gift entrance again</button>
       <div className={styles.destinations}>
         {destinations.map((d) => (
           <Link key={d.to} to={d.to} style={{ textDecoration: 'none', color: 'inherit' }}>
