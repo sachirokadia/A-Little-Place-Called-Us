@@ -13,7 +13,7 @@ export const gamesRouter = Router();
 // never read or overwrite another player's row, and no content
 // (letters, memories, journal text) is ever stored here.
 
-const GAME_KEYS = ['memory-match', 'mystery', 'quiz', 'arcade-unlocks', 'photo-match', 'catch-hearts'] as const;
+const GAME_KEYS = ['memory-match', 'mystery', 'quiz', 'arcade-unlocks', 'photo-match', 'catch-hearts', 'hero-adventure'] as const;
 type GameKey = (typeof GAME_KEYS)[number];
 
 const UNLOCKS = ['golden-star', 'lantern', 'banner', 'pixel-cat', 'pixel-fox'] as const;
@@ -84,6 +84,31 @@ const progressSchemas: Record<GameKey, z.ZodType<unknown>> = {
       runId: z.string().max(80).optional(),
     })
     .strict(),
+  // Personalized adventure: 3 levels, 5 tokens per level, 15
+  // total. adventureCompleted is only honest with all 3 levels
+  // completed, and level ids are unique — both enforced here,
+  // never trusted from the client.
+  'hero-adventure': z
+    .object({
+      levelsCompleted: z.array(z.enum(['rooftop-row', 'market-lane', 'harbour-lights'])).max(3).optional(),
+      tokensCollected: intRange(0, 15).optional(),
+      adventureCompleted: z.boolean().optional(),
+    })
+    .strict()
+    .refine((v) => Object.keys(v).length >= 1, { message: 'At least one field is required' })
+    .refine(
+      (v) => v.levelsCompleted === undefined || new Set(v.levelsCompleted).size === v.levelsCompleted.length,
+      { message: 'levelsCompleted must not contain duplicates' },
+    )
+    .refine(
+      (v) =>
+        v.adventureCompleted !== true ||
+        (v.levelsCompleted !== undefined &&
+          (['rooftop-row', 'market-lane', 'harbour-lights'] as const).every((l) =>
+            v.levelsCompleted!.includes(l),
+          )),
+      { message: 'adventureCompleted requires all 3 levels completed' },
+    ),
 };
 
 function parseGameKey(raw: string | undefined): GameKey {

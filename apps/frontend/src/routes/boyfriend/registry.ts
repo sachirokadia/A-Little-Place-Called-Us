@@ -44,4 +44,10 @@ export const BOYFRIEND_GAMES: BoyfriendGameEntry[] = [
     description: 'Solve riddles in order to open the chest and its reward.',
     anchor: 'game-chest',
   },
+  {
+    id: 'hero-adventure',
+    title: 'The Rooftop Adventure',
+    description: 'An original rooftop adventure: three little city levels, five memory tokens each, and a finish flag at the end of every street.',
+    anchor: 'game-hero-adventure',
+  },
 ];

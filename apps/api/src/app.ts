@@ -9,6 +9,7 @@ import { boyfriendRouter } from './routes/boyfriend.js';
 import { contentRouter } from './routes/content.js';
 import { exportRouter } from './routes/export.js';
 import { gamesRouter } from './routes/games.js';
+import { heroRouter } from './routes/hero.js';
 import { healthRouter } from './routes/health.js';
 import { mediaRouter } from './routes/media.js';
 import { preferencesRouter } from './routes/preferences.js';
@@ -74,6 +75,7 @@ export function createApp() {
   app.use('/api/v1', exportRouter);
   app.use('/api/v1', gamesRouter);
   app.use('/api/v1', boyfriendRouter);
+  app.use('/api/v1', heroRouter);
   app.use('/api/v1', mediaRouter);
 
   app.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND', 'Not found')));

@@ -1,0 +1,194 @@
+/* The Rooftop Adventure — soft pastel panels outside the canvas,
+   comic-panel framing, gentle styling only. The canvas itself draws
+   the city with plain shapes (rooftops, silhouettes, motion lines).
+   No sound is used anywhere in this game. */
+
+.wrap {
+  font-family: Georgia, "Times New Roman", serif;
+  color: #2b2118;
+}
+
+.panel {
+  background: #fdf8ec;
+  border: 3px solid #2b2118;
+  border-radius: 0.5rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  box-shadow: 4px 4px 0 rgba(43, 33, 24, 0.15);
+}
+
+.panel h3, .panel h4 { margin: 0.25rem 0 0.5rem; }
+
+.note {
+  background: #fff3c4;
+  border: 2px solid #2b2118;
+  border-radius: 0.25rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.note p { margin: 0; }
+
+.levelGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.levelCard {
+  background: #fffdf6;
+  border: 3px solid #2b2118;
+  border-radius: 0.5rem;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: #2b2118;
+}
+
+.levelCard:disabled { opacity: 0.6; cursor: default; }
+
+.levelCard:focus-visible, .btn:focus-visible, .touchBtn:focus-visible {
+  outline: 3px solid #ff8c42;
+  outline-offset: 2px;
+}
+
+.btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0.6rem 1rem;
+  background: #c94f4f;
+  border: 3px solid #2b2118;
+  border-radius: 0.25rem;
+  box-shadow: 0 3px 0 #2b2118;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  color: #fff;
+}
+
+.btnQuiet {
+  background: #e8dcc8;
+  color: #2b2118;
+}
+
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #2b2118; }
+
+.btnRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}
+
+.canvasFrame {
+  border: 3px solid #2b2118;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  background: #fffdf6;
+  box-shadow: 4px 4px 0 rgba(43, 33, 24, 0.15);
+  margin: 0.75rem 0;
+}
+
+.canvasFrame canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+  background: #fde8d7;
+}
+
+.touchRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.touchBtn {
+  min-height: 48px;
+  min-width: 56px;
+  padding: 0.6rem 0.9rem;
+  background: #ffe9a8;
+  border: 3px solid #2b2118;
+  border-radius: 0.25rem;
+  box-shadow: 0 3px 0 #2b2118;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  color: #2b2118;
+  touch-action: none;
+  user-select: none;
+}
+
+.touchBtn:active { transform: translateY(2px); box-shadow: 0 1px 0 #2b2118; }
+
+.missionList {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.missionCard {
+  background: #fffdf6;
+  border: 2px solid #2b2118;
+  border-radius: 0.25rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.missionCard p { margin: 0.25rem 0; }
+
+.missionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* Mission editor: plain form fields, no animation. */
+.editorForm {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.field label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.field input, .field select, .field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: #2b2118;
+  background: #fffdf6;
+  border: 2px solid #2b2118;
+  border-radius: 0.25rem;
+  padding: 0.6rem 0.7rem;
+  min-height: 48px;
+}
+
+.field textarea { min-height: 96px; }
+
+.field p { margin: 0.25rem 0 0; }
+
+.finalMessage {
+  background: #fdf8ec;
+  border: 2px solid #2b2118;
+  border-radius: 0.25rem;
+  padding: 1.25rem 1.1rem;
+  margin: 1rem 0;
+  line-height: 1.7;
+}
+
+.finalMessage p { max-width: 62ch; margin: 0 0 1rem; }
+.finalMessage p:last-child { margin-bottom: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel, .canvasFrame { box-shadow: none; }
+}

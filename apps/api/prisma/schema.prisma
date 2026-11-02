@@ -86,6 +86,7 @@ model User {
   idempotencyKeys IdempotencyKey[]
   gameProgress GameProgress[]
   quizQuestions QuizQuestion[]
+  heroMissions HeroMission[]
   guessRoundsCreated GuessRound[]
   chestRiddles ChestRiddle[]
   chestSolves ChestSolve[]
@@ -139,6 +140,7 @@ model Space {
   voiceNotes  VoiceNote[]
   gameProgress GameProgress[]
   quizQuestions QuizQuestion[]
+  heroMissions HeroMission[]
   guessRounds GuessRound[]
   chestRiddles ChestRiddle[]
   chestSolves ChestSolve[]
@@ -501,6 +503,37 @@ model ChestSolve {
 
   @@unique([spaceId, playerId, riddleId])
   @@index([spaceId, playerId])
+}
+
+// Personalized adventure: missions are shared config for a space,
+// like chest riddles — either member may create one, but only the
+// author may PATCH or DELETE their own row (partner gets a generic
+// 404). A mission carries at most one reward link, validated by
+// the route layer against the linked row's space and visibility;
+// the link columns are plain ids (no FK) so deleting the linked
+// memory/letter/appreciation never cascades into the mission, and
+// a mission never carries another user's private content — the
+// route only returns the mission's own fields. No official
+// property names, assets, or dialogue appear anywhere here; the
+// level ids are generic place names chosen for this feature.
+model HeroMission {
+  id                   String   @id @default(cuid())
+  spaceId              String
+  space                Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  authorId             String
+  author               User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  levelId              String
+  title                String
+  clue                 String
+  rewardMessage        String
+  rewardMemoryId       String?
+  rewardLetterId       String?
+  rewardAppreciationId String?
+  order                Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([spaceId, levelId])
 }
 
 model ChestReward {
