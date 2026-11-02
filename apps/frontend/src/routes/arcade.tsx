@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, DEFAULT_PREFERENCES, getPreferences, listItems, savePreferences, type Preferences, type Space } from '../lib/api.js';
+import { api, DEFAULT_PREFERENCES, getPreferences, listItems, savePreferences, type Me, type Preferences, type Space } from '../lib/api.js';
 import { Page } from '../components/ui.js';
 import styles from './arcade.module.css';
+import { PhotoMatch } from './boyfriend/PhotoMatch.js';
+import { QuizGame } from './boyfriend/QuizGame.js';
+import { CatchHearts } from './boyfriend/CatchHearts.js';
+import { GuessGame } from './boyfriend/GuessGame.js';
+import { ChestGame } from './boyfriend/ChestGame.js';
+import { BOYFRIEND_GAMES } from './boyfriend/registry.js';
 import {
   BOARD_PASS_START_BONUS, BOARD_PLACES, BOARD_START_COINS, MATCH_DECK, MYSTERY_CLUES,
   MYSTERY_OPTIONS, MYSTERY_SOLUTION_ID, QUIZ_QUESTIONS, UNLOCKABLES, UNLOCK_KEYS,
@@ -668,7 +674,7 @@ function TradingBoard({ onUnlock }: { onUnlock: (key: UnlockKey) => void }) {
 // Arcade page
 // ---------------------------------------------------------------------------
 
-export function ArcadeContent({ space }: { space: Space }) {
+export function ArcadeContent({ space, me }: { space: Space; me: Me }) {
   const memory = useGameProgress<MemoryProgress>(space.id, 'memory-match', { completedGames: 0, bestTurns: null, lastTurns: null, lastPairs: 0 });
   const mystery = useGameProgress<MysteryProgress>(space.id, 'mystery', { completed: false, foundClues: [] });
   const quiz = useGameProgress<QuizProgress>(space.id, 'quiz', { answered: 0, correct: 0 });
@@ -748,6 +754,17 @@ export function ArcadeContent({ space }: { space: Space }) {
           <button className={styles.mapBtn} type="button" onClick={() => scrollToSection('arcade-star')}>Brass Star</button>
         </nav>
 
+        <nav className={styles.mapNav} aria-label="Boyfriend Arcade map">
+          {BOYFRIEND_GAMES.map((game) => (
+            <button key={game.id} className={styles.mapBtn} type="button" onClick={() => scrollToSection(game.anchor)}>{game.title}</button>
+          ))}
+        </nav>
+
+        <section className={styles.section} aria-label="The Boyfriend Arcade">
+          <h2 style={{ marginTop: 0 }}>The Boyfriend Arcade</h2>
+          <p>Five more games, tucked inside the same arcade. Questions, riddles, and guess rounds are ones you write yourselves and are stored in the database — nothing here invents a memory, and the chest never locks a real memory away.</p>
+        </section>
+
         <div className={styles.starCard} id="arcade-star">
           <h2 style={{ marginTop: 0 }}>Brass star</h2>
           <p>You followed the star from Home. This star&apos;s message is pinned just below — open it.</p>
@@ -782,6 +799,31 @@ export function ArcadeContent({ space }: { space: Space }) {
           ) : (
             <p>A generic arcade collectible: a pixel star token, earned simply by visiting the arcade. There is no memory linked here yet — when you add a real memory to the Memory Wall, a real one will appear here instead. Nothing here invents a memory.</p>
           )}
+        </section>
+
+        <section className={styles.section} id="game-photo-match" tabIndex={-1} aria-labelledby="photo-match-heading">
+          <h2 id="photo-match-heading">Photo Memory Match</h2>
+          <PhotoMatch space={space} me={me} />
+        </section>
+
+        <section className={styles.section} id="game-quiz-db" tabIndex={-1} aria-labelledby="quiz-db-heading">
+          <h2 id="quiz-db-heading">How Well Do You Know Us?</h2>
+          <QuizGame space={space} me={me} />
+        </section>
+
+        <section className={styles.section} id="game-catch-hearts" tabIndex={-1} aria-labelledby="catch-hearts-heading">
+          <h2 id="catch-hearts-heading">Catch the Hearts</h2>
+          <CatchHearts space={space} me={me} />
+        </section>
+
+        <section className={styles.section} id="game-guess" tabIndex={-1} aria-labelledby="guess-heading">
+          <h2 id="guess-heading">Guess My Answer</h2>
+          <GuessGame space={space} me={me} />
+        </section>
+
+        <section className={styles.section} id="game-chest" tabIndex={-1} aria-labelledby="chest-heading">
+          <h2 id="chest-heading">Unlock the Chest</h2>
+          <ChestGame space={space} me={me} />
         </section>
 
         <section className={styles.section} aria-label="Your arcade unlocks">

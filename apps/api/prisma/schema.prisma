@@ -85,6 +85,11 @@ model User {
   auditEvents  AuditEvent[] @relation("AuditActor")
   idempotencyKeys IdempotencyKey[]
   gameProgress GameProgress[]
+  quizQuestions QuizQuestion[]
+  guessRoundsCreated GuessRound[]
+  chestRiddles ChestRiddle[]
+  chestSolves ChestSolve[]
+  chestRewardsUpdated ChestReward[]
 
   @@index([emailLower])
 }
@@ -133,6 +138,11 @@ model Space {
   reminders   Reminder[]
   voiceNotes  VoiceNote[]
   gameProgress GameProgress[]
+  quizQuestions QuizQuestion[]
+  guessRounds GuessRound[]
+  chestRiddles ChestRiddle[]
+  chestSolves ChestSolve[]
+  chestReward ChestReward?
 }
 
 model SpaceMember {
@@ -184,6 +194,7 @@ model Memory {
 
   media      MediaAsset[]
   letters    Letter[]
+  chestRewards ChestReward[]
 
   @@index([spaceId, createdAt(sort: Desc)])
   @@index([spaceId, authorId])
@@ -419,4 +430,88 @@ model GameProgress {
 
   @@unique([spaceId, playerId, gameKey])
   @@index([spaceId, playerId])
+}
+
+// Boyfriend Arcade: quiz questions, guess-the-answer rounds, the
+// treasure-chest riddle chain, and the chest reward. All rows are
+// space-scoped; the space FK cascades. Answers are never trusted
+// from the client on read paths — see routes/boyfriend.ts for the
+// masking rules (correctOption and riddle answers are write-only;
+// a guess round's answer is shown only to its creator until reveal).
+model QuizQuestion {
+  id            String   @id @default(uuid())
+  spaceId       String
+  space         Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  question      String
+  options       String[]
+  correctOption Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([spaceId, createdAt])
+}
+
+model GuessRound {
+  id        String   @id @default(uuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  creatorId String
+  creator   User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  question  String
+  answer    String
+  guesserId String?
+  guessText String?
+  revealed  Boolean  @default(false)
+  correct   Boolean?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([spaceId, createdAt(sort: Desc)])
+}
+
+model ChestRiddle {
+  id        String   @id @default(uuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  sortOrder Int
+  question  String
+  answer    String
+  hint      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solves    ChestSolve[]
+
+  @@index([spaceId, sortOrder])
+}
+
+model ChestSolve {
+  id        String   @id @default(uuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  playerId  String
+  player    User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  riddleId  String
+  riddle    ChestRiddle @relation(fields: [riddleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([spaceId, playerId, riddleId])
+  @@index([spaceId, playerId])
+}
+
+model ChestReward {
+  id         String   @id @default(uuid())
+  spaceId    String   @unique
+  space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  message    String
+  memoryId   String?
+  memory     Memory?  @relation(fields: [memoryId], references: [id], onDelete: SetNull)
+  updatedById String
+  updatedBy  User     @relation(fields: [updatedById], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

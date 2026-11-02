@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { badRequest, notFound, unauthorized } from '../errors.js';
+import { badRequest, conflict, notFound, unauthorized } from '../errors.js';
 import { requireSpaceMember } from '../lib/membership.js';
 import { validateBody } from '../middleware/validate.js';
 
@@ -13,7 +13,7 @@ export const gamesRouter = Router();
 // never read or overwrite another player's row, and no content
 // (letters, memories, journal text) is ever stored here.
 
-const GAME_KEYS = ['memory-match', 'mystery', 'quiz', 'arcade-unlocks'] as const;
+const GAME_KEYS = ['memory-match', 'mystery', 'quiz', 'arcade-unlocks', 'photo-match', 'catch-hearts'] as const;
 type GameKey = (typeof GAME_KEYS)[number];
 
 const UNLOCKS = ['golden-star', 'lantern', 'banner', 'pixel-cat', 'pixel-fox'] as const;
@@ -50,6 +50,38 @@ const progressSchemas: Record<GameKey, z.ZodType<unknown>> = {
   'arcade-unlocks': z
     .object({
       unlocks: z.array(z.enum(UNLOCKS)).max(20).optional(),
+    })
+    .strict(),
+  // Boyfriend Arcade: photo-match. A win (lastMoves) only counts
+  // with its board size (lastPairs), and can never use fewer moves
+  // than pairs; bestMoves obeys the same floor when a board size
+  // is present. lastPairs is 4, 6, or 8 only.
+  'photo-match': z
+    .object({
+      completedGames: intRange(0, 10000).optional(),
+      lastMoves: intRange(0, 10000).optional(),
+      lastPairs: z.union([z.literal(4), z.literal(6), z.literal(8)]).optional(),
+      lastSeconds: intRange(0, 3600).optional(),
+      bestMoves: intRange(0, 10000).optional(),
+    })
+    .strict()
+    .refine((v) => Object.keys(v).length >= 1, { message: 'At least one field is required' })
+    .refine((v) => v.lastMoves === undefined || (v.lastPairs !== undefined && v.lastMoves >= v.lastPairs), {
+      message: 'lastMoves requires lastPairs and must be at least lastPairs',
+    })
+    .refine((v) => v.bestMoves === undefined || v.lastPairs === undefined || v.bestMoves >= v.lastPairs, {
+      message: 'bestMoves must be at least lastPairs',
+    }),
+  // Boyfriend Arcade: catch-hearts. Documented maximum is 60
+  // catches in 30 seconds (2/second), so scores are bounded 0-60.
+  // runId lets the duplicate-run guard in the PUT handler reject a
+  // replayed run with 409 instead of overwriting the stored row.
+  'catch-hearts': z
+    .object({
+      gamesPlayed: intRange(0, 10000).optional(),
+      lastScore: intRange(0, 60).optional(),
+      bestScore: intRange(0, 60).optional(),
+      runId: z.string().max(80).optional(),
     })
     .strict(),
 };
@@ -99,6 +131,19 @@ gamesRouter.put('/spaces/:spaceId/game-progress/:gameKey', validateBody(gameProg
     const gameKey = parseGameKey(req.params.gameKey);
     await requireSpaceMember(req.user.id, spaceId);
     const progress = validateProgress(gameKey, (req.body as { progress: unknown }).progress);
+    // Duplicate-run guard, catch-hearts only: a replayed runId
+    // (identical to the caller's stored row) is a 409 and never
+    // overwrites. Other keys are unaffected.
+    if (gameKey === 'catch-hearts') {
+      const incomingRunId = (progress as { runId?: unknown }).runId;
+      if (typeof incomingRunId === 'string') {
+        const existing = await prisma.gameProgress.findUnique({
+          where: { spaceId_playerId_gameKey: { spaceId, playerId: req.user.id, gameKey } },
+        });
+        const storedRunId = (existing?.progress as { runId?: unknown } | null)?.runId;
+        if (storedRunId === incomingRunId) throw conflict('DUPLICATE_RUN', 'Duplicate run');
+      }
+    }
     const row = await prisma.gameProgress.upsert({
       where: { spaceId_playerId_gameKey: { spaceId, playerId: req.user.id, gameKey } },
       create: { spaceId, playerId: req.user.id, gameKey, progress },

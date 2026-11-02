@@ -1050,11 +1050,11 @@ export function NotFoundPage() {
   );
 }
 
-export function ArcadePage({ space }: { me: Me; space: Space }) {
+export function ArcadePage({ me, space }: { me: Me; space: Space }) {
   // Phase 4: the real arcade page lives in arcade.tsx. Game progress
   // never gates any other room — Home, Memory Wall, Letters, Quiet
   // Room, Appreciations and Future all work with zero game progress.
-  return <ArcadeContent space={space} />;
+  return <ArcadeContent space={space} me={me} />;
 }
 
 export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onSignedIn: () => Promise<void> }) {

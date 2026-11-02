@@ -100,6 +100,9 @@ textarea:focus-visible, select:focus-visible {
   border: 0;
   border-radius: var(--radius-pill);
   padding: 0.55rem 1.15rem;
+  /* Minimum 44px tap target (QA measured 42px before this rule). */
+  min-height: 44px;
+  box-sizing: border-box;
   cursor: pointer;
   font-size: 0.95rem;
   font-family: inherit;
