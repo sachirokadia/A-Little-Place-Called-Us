@@ -6,9 +6,11 @@ import { checkRateLimit, RATE_LIMITS, userKey } from './lib/rateLimit.js';
 import { csrfGuard, originGuard, resolveSession } from './middleware/auth.js';
 import { authRouter } from './routes/auth.js';
 import { contentRouter } from './routes/content.js';
+import { exportRouter } from './routes/export.js';
 import { gamesRouter } from './routes/games.js';
 import { healthRouter } from './routes/health.js';
 import { mediaRouter } from './routes/media.js';
+import { preferencesRouter } from './routes/preferences.js';
 import { spacesRouter } from './routes/spaces.js';
 
 export function createApp() {
@@ -65,8 +67,10 @@ export function createApp() {
 
   app.use('/api/v1', healthRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/auth', preferencesRouter);
   app.use('/api/v1/spaces', spacesRouter);
   app.use('/api/v1', contentRouter);
+  app.use('/api/v1', exportRouter);
   app.use('/api/v1', gamesRouter);
   app.use('/api/v1', mediaRouter);
 

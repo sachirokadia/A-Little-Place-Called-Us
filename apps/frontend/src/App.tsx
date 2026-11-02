@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import { getMe, getSpace, setCsrf, type Me, type Space } from './lib/api.js';
+import { applyMotionPreference, getMe, getPreferences, getSpace, setCsrf, type Me, type Space } from './lib/api.js';
 import { LoadingState } from './components/ui.js';
 import {
   AppreciationsPage, ArcadePage, AuthPage, DeletedPage, FavouritesPage, FuturePage,
-  HomePage, LettersPage, MemoriesPage, NotFoundPage, QuietPage, SettingsPage, SpacePage,
+  HomePage, LettersPage, MemoriesPage, NotFoundPage, QuietPage, SettingsPage, SpacePage, WelcomePage,
 } from './routes/pages.js';
 
 const DESTINATIONS = [
@@ -43,6 +43,16 @@ export default function App() {
     try {
       const m = await getMe();
       setMe(m);
+      // Apply the account motion preference after sign-in (and on
+      // refresh): only 'reduce' adds the class; 'system' is left to
+      // the OS media query and 'full' never adds it.
+      try {
+        const prefs = await getPreferences();
+        applyMotionPreference(prefs.motion);
+      } catch {
+        // Preferences are optional here: a failed read must not
+        // block sign-in, and the OS media query still applies.
+      }
       try {
         const s = await getSpace();
         setSpace(s);
@@ -69,7 +79,8 @@ export default function App() {
       <Nav me={me} space={space} />
       <Routes>
         <Route path="/login" element={signedIn ? <Navigate to="/" replace /> : <AuthPage mode="login" onSignedIn={refresh} />} />
-        <Route path="/register" element={signedIn ? <Navigate to="/" replace /> : <AuthPage mode="register" onSignedIn={refresh} />} />
+        <Route path="/register" element={signedIn ? <Navigate to="/welcome" replace /> : <AuthPage mode="register" onSignedIn={refresh} />} />
+        <Route path="/welcome" element={signedIn ? <WelcomePage me={me} space={space} onSpaceChange={refresh} /> : signedOut} />
         <Route path="/" element={signedIn ? <HomePage me={me} space={space} onSpaceChange={refresh} /> : signedOut} />
         <Route path="/space" element={signedIn ? <SpacePage me={me} onSpaceChange={refresh} /> : signedOut} />
         <Route path="/memories" element={signedIn && space ? <MemoriesPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />

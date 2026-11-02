@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { api, getSpace, listItems, setCsrf, type AnyItem, type Me, type Space } from '../lib/api.js';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { api, applyMotionPreference, DEFAULT_PREFERENCES, getPreferences, getSpace, listItems, savePreferences, setCsrf, type AnyItem, type Me, type MotionPreference, type Preferences, type Space } from '../lib/api.js';
 import { Card, EmptyState, ErrorBox, ErrorState, FormField, LoadingState, Page, fmtDate } from '../components/ui.js';
 import { ArcadeContent } from './arcade.js';
 import styles from './home.module.css';
@@ -42,14 +42,26 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
     return out;
   });
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  // Synchronous in-flight guard: React `submitting` state only takes
+  // effect after a re-render, so two submits dispatched in the same
+  // tick would both pass the state check. This ref is set
+  // synchronously, so the second same-tick submit returns at once.
+  const inFlightRef = useRef(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting || inFlightRef.current) return;
     setError(null);
+    inFlightRef.current = true;
+    setSubmitting(true);
     try {
       await api(`/${singular}/${item.id}`, { method: 'PATCH', body: values });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
     }
   };
   return (
@@ -64,8 +76,8 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
           )}
         </FormField>
       ))}
-      <button className="btn" type="submit">Save</button>{' '}
-      <button className="btn quiet" type="button" onClick={onCancel}>Cancel</button>
+      <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save'}</button>{' '}
+      <button className="btn quiet" type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
     </form>
   );
 }
@@ -128,27 +140,45 @@ function ItemCard({ item, singular, me, onRefresh, extra, envelopeMode, polaroid
       {extra}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
         {isAuthor && <button className="btn quiet" onClick={() => setEditing(true)}>Edit</button>}
-        {isAuthor && <button className="btn quiet" onClick={async () => { setError(null); try { await softDelete(singular, item.id); onRefresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete'); } }}>Move to Deleted</button>}
-        <button className="btn quiet" onClick={async () => { try { await favourite(singular, item.id); onRefresh(); } catch { /* favourite is optional */ } }}>♥ Favourite</button>
+        {isAuthor && <button className="btn quiet" onClick={async () => { if (!window.confirm('Move this item to Deleted? You can restore it from Deleted.')) return; setError(null); try { await softDelete(singular, item.id); onRefresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete'); } }}>Move to Deleted</button>}
+        <button className="btn quiet" onClick={async () => { setError(null); try { await favourite(singular, item.id); onRefresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not favourite'); } }}>♥ Favourite</button>
       </div>
     </Card>
   );
 }
 
-function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'datetime-local' | 'select'; options?: string[] }[]; onCreate: (values: Record<string, string>) => Promise<void>; submitLabel?: string }) {
+function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'datetime-local' | 'select'; options?: string[] }[]; onCreate: (values: Record<string, string>, idempotencyKey: string) => Promise<void>; submitLabel?: string }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  // Synchronous in-flight guard: React `submitting` state only takes
+  // effect after a re-render, so two submits dispatched in the same
+  // tick would both pass the state check (and each would mint a fresh
+  // idempotency key, so the server could not dedupe them). This ref
+  // is set synchronously, so the second same-tick submit returns at
+  // once. Normal submits are unchanged: a fresh key per attempt, and
+  // on failure the ref is cleared, the button re-enables, and the
+  // error stays visible — no silent retry.
+  const inFlightRef = useRef(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting || inFlightRef.current) return;
     setError(null);
     setSaved(false);
+    inFlightRef.current = true;
+    setSubmitting(true);
     try {
-      await onCreate(values);
+      // A fresh key per submit attempt: a retried or double request
+      // replays instead of creating a duplicate (server-side support).
+      await onCreate(values, crypto.randomUUID());
       setValues({});
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
     }
   };
   return (
@@ -169,7 +199,7 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
           )}
         </FormField>
       ))}
-      <button className="btn" type="submit">{submitLabel}</button>
+      <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : submitLabel}</button>
     </form>
   );
 }
@@ -177,7 +207,7 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
 export function ListPage({ me, space, plural, singular, title, subtitle, createFields, onCreate, extraForItem, favouritedOnly = false, layout, groupBy, sortByTargetDate = false, pageClassName, envelopeMode, polaroidMode, galleryMode, headerExtra, filterFn, emptyTitle, emptyMessage, onCreated }: {
   me: Me; space: Space; plural: string; singular: string; title: string; subtitle: string;
   createFields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'datetime-local' | 'select'; options?: string[] }[];
-  onCreate: (spaceId: string, values: Record<string, string>) => Promise<void>;
+  onCreate: (spaceId: string, values: Record<string, string>, idempotencyKey?: string) => Promise<void>;
   extraForItem?: (item: AnyItem, refresh: () => void) => React.ReactNode;
   favouritedOnly?: boolean;
   layout?: string;
@@ -249,7 +279,7 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
   return (
     <Page title={title} subtitle={subtitle} backHome className={pageCls}>
       {headerExtra}
-      {createFields.length > 0 && <CreateForm fields={createFields} onCreate={async (v) => { await onCreate(space.id, v); await refresh(); onCreated?.(); }} />}
+      {createFields.length > 0 && <CreateForm fields={createFields} onCreate={async (v, key) => { await onCreate(space.id, v, key); await refresh(); onCreated?.(); }} />}
       {error ? <ErrorState message={error} onRetry={refresh} />
         : loading ? <LoadingState />
         : visible.length === 0 ? <EmptyState title={emptyTitle} message={emptyMessage} />
@@ -280,13 +310,15 @@ function MediaStrip({ linkedType, linkedId }: { linkedType: string; linkedId: st
 function UploadForm({ linkedType, linkedId, onDone }: { linkedType: string; linkedId: string; onDone: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [spaceId, setSpaceId] = useState<string>('');
   useEffect(() => { getSpace().then((s) => setSpaceId(s?.id ?? '')).catch(() => undefined); }, []);
   return (
     <form onSubmit={async (e) => {
       e.preventDefault();
-      if (!file || !spaceId) return;
+      if (!file || !spaceId || submitting) return;
       setError(null);
+      setSubmitting(true);
       const form = new FormData();
       form.append('linkedType', linkedType);
       form.append('linkedId', linkedId);
@@ -297,11 +329,13 @@ function UploadForm({ linkedType, linkedId, onDone }: { linkedType: string; link
         onDone();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Upload failed');
+      } finally {
+        setSubmitting(false);
       }
     }}>
       <ErrorBox message={error} />
       <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />{' '}
-      <button className="btn quiet" type="submit" disabled={!file}>Upload</button>
+      <button className="btn quiet" type="submit" disabled={!file || submitting}>{submitting ? 'Uploading…' : 'Upload'}</button>
     </form>
   );
 }
@@ -319,7 +353,7 @@ export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
         { name: 'story', label: 'Journal entry', kind: 'textarea' },
         { name: 'happenedOn', label: 'Date it happened', kind: 'date' },
       ]}
-      onCreate={async (spaceId, v) => { await api(`/spaces/${spaceId}/memories`, { method: 'POST', body: { title: v.title, caption: v.caption ?? '', story: v.story ?? '', happenedOn: v.happenedOn || null } }); }}
+      onCreate={async (spaceId, v, key) => { await api(`/spaces/${spaceId}/memories`, { method: 'POST', body: { title: v.title, caption: v.caption ?? '', story: v.story ?? '', happenedOn: v.happenedOn || null }, idempotencyKey: key }); }}
       extraForItem={(item, refresh) => (
         <div>
           <MediaStrip linkedType="memory" linkedId={item.id} />
@@ -342,7 +376,7 @@ export function LettersPage({ me, space }: { me: Me; space: Space }) {
         { name: 'revealAt', label: 'Release date and time (for scheduled letters)', kind: 'datetime-local' },
         { name: 'memoryId', label: 'Link to a memory (optional — paste a memory id)', kind: 'text' },
       ]}
-      onCreate={async (spaceId, v) => {
+      onCreate={async (spaceId, v, key) => {
         await api(`/spaces/${spaceId}/letters`, {
           method: 'POST',
           body: {
@@ -350,6 +384,7 @@ export function LettersPage({ me, space }: { me: Me; space: Space }) {
             revealAt: v.revealAt ? new Date(v.revealAt).toISOString() : null,
             memoryId: v.memoryId || null,
           },
+          idempotencyKey: key,
         });
       }}
     />
@@ -384,7 +419,7 @@ export function QuietPage({ me, space }: { me: Me; space: Space }) {
         { name: 'title', label: 'Title' },
         { name: 'body', label: 'Journal entry', kind: 'textarea' },
         { name: 'mood', label: 'Mood (optional)' },
-      ]} onCreate={async (v) => { await api(`/spaces/${space.id}/journals`, { method: 'POST', body: v }); await refresh(); }} />
+      ]} onCreate={async (v, key) => { await api(`/spaces/${space.id}/journals`, { method: 'POST', body: v, idempotencyKey: key }); await refresh(); }} />
       {moods.length > 0 && (
         <div className="chip-row" role="group" aria-label="Filter journals by mood">
           <button className={`chip${!moodFilter ? ' active' : ''}`} type="button" onClick={() => setMoodFilter('')}>All moods</button>
@@ -409,11 +444,14 @@ export function QuietPage({ me, space }: { me: Me; space: Space }) {
 function VoiceNotes({ space }: { space: Space }) {
   const { items, error, loading, refresh } = useList(space.id, 'voice-notes');
   const [title, setTitle] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   return (
     <div>
-      <form onSubmit={async (e) => { e.preventDefault(); if (!title) return; await api(`/spaces/${space.id}/voice-notes`, { method: 'POST', body: { title } }); setTitle(''); await refresh(); }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <form onSubmit={async (e) => { e.preventDefault(); if (!title || submitting) return; setFormError(null); setSubmitting(true); try { await api(`/spaces/${space.id}/voice-notes`, { method: 'POST', body: { title }, idempotencyKey: crypto.randomUUID() }); setTitle(''); await refresh(); } catch (err) { setFormError(err instanceof Error ? err.message : 'Could not save'); } finally { setSubmitting(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+        <ErrorBox message={formError} />
         <FormField label="Voice note title"><input className="field" value={title} onChange={(e) => setTitle(e.target.value)} /></FormField>
-        <button className="btn" type="submit">Add voice note</button>
+        <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Add voice note'}</button>
       </form>
       {error ? <ErrorState message={error} onRetry={refresh} />
         : loading ? <LoadingState />
@@ -442,7 +480,7 @@ export function AppreciationsPage({ me, space }: { me: Me; space: Space }) {
         { name: 'text', label: 'Note', kind: 'textarea' },
         { name: 'kind', label: 'Kind', kind: 'select', options: ['appreciation', 'achievement'] },
         { name: 'forName', label: 'For (name)' },
-      ]} onCreate={async (v) => { await api(`/spaces/${space.id}/appreciations`, { method: 'POST', body: v }); await refresh(); }} />
+      ]} onCreate={async (v, key) => { await api(`/spaces/${space.id}/appreciations`, { method: 'POST', body: v, idempotencyKey: key }); await refresh(); }} />
       <div className="chip-row" role="group" aria-label="Filter cards by kind">
         <button className={`chip${!kindFilter ? ' active' : ''}`} type="button" onClick={() => setKindFilter('')}>All cards</button>
         <button className={`chip${kindFilter === 'appreciation' ? ' active' : ''}`} type="button" onClick={() => setKindFilter('appreciation')}>Appreciations</button>
@@ -533,7 +571,7 @@ export function FuturePage({ me, space }: { me: Me; space: Space }) {
           { name: 'targetDate', label: 'Target date', kind: 'date' },
           { name: 'location', label: 'Location (optional)' },
         ]}
-        onCreate={async (spaceId, v) => { await api(`/spaces/${spaceId}/plans`, { method: 'POST', body: { title: v.title, detail: v.detail ?? '', category: v.category || 'other', targetDate: v.targetDate || null, location: v.location ?? '' } }); }}
+        onCreate={async (spaceId, v, key) => { await api(`/spaces/${spaceId}/plans`, { method: 'POST', body: { title: v.title, detail: v.detail ?? '', category: v.category || 'other', targetDate: v.targetDate || null, location: v.location ?? '' }, idempotencyKey: key }); }}
         extraForItem={(item, refresh) => (
           <>
             <p><span className="journey-category">{(item.category as string) ?? 'other'}</span>{item.location ? <span> · {item.location as string}</span> : null}</p>
@@ -756,12 +794,15 @@ function RemindersSection({ space }: { space: Space }) {
   const { items, refresh } = useList(space.id, 'reminders');
   const [text, setText] = useState('');
   const [random, setRandom] = useState<AnyItem | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   return (
     <div style={{ marginTop: '2rem' }}>
       <h2>Little reminders</h2>
-      <form onSubmit={async (e) => { e.preventDefault(); if (!text) return; await api(`/spaces/${space.id}/reminders`, { method: 'POST', body: { text, kind: 'note' } }); setText(''); await refresh(); }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <form onSubmit={async (e) => { e.preventDefault(); if (!text || submitting) return; setFormError(null); setSubmitting(true); try { await api(`/spaces/${space.id}/reminders`, { method: 'POST', body: { text, kind: 'note' }, idempotencyKey: crypto.randomUUID() }); setText(''); await refresh(); } catch (err) { setFormError(err instanceof Error ? err.message : 'Could not save'); } finally { setSubmitting(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+        <ErrorBox message={formError} />
         <FormField label="A note for both of you"><input className="field" value={text} onChange={(e) => setText(e.target.value)} /></FormField>
-        <button className="btn" type="submit">Leave a reminder</button>{' '}
+        <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Leave a reminder'}</button>{' '}
         <button className="btn quiet" type="button" onClick={async () => { const r = await api<AnyItem | null>(`/spaces/${space.id}/reminders/random`); setRandom(r); }}>Random reminder</button>
       </form>
       {random && <Card><p>{random.text as string}</p></Card>}
@@ -796,15 +837,18 @@ export function ArcadePage({ space }: { me: Me; space: Space }) {
   return <ArcadeContent space={space} />;
 }
 
-export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onSignedIn: () => void }) {
+export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onSignedIn: () => Promise<void> }) {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setError(null);
+    setSubmitting(true);
     try {
       const data = await api<{ csrfToken: string }>(`/auth/${mode}`, {
         method: 'POST',
@@ -812,10 +856,18 @@ export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onS
       });
       // The API returns a fresh session-bound CSRF token on login/register.
       setCsrf(data.csrfToken);
-      onSignedIn();
-      navigate('/');
+      // Await the refresh before navigating: navigating while App
+      // still has me=null makes the /welcome route render its
+      // signed-out redirect to /login, which then bounces the
+      // now-signed-in user to /. Awaiting first lets the destination
+      // render with settled state.
+      await onSignedIn();
+      // Register goes through onboarding; login goes straight home.
+      navigate(mode === 'register' ? '/welcome' : '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign in');
+    } finally {
+      setSubmitting(false);
     }
   };
   return (
@@ -825,7 +877,7 @@ export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onS
         <FormField label="Email"><input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></FormField>
         {mode === 'register' && <FormField label="Display name"><input className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></FormField>}
         <FormField label="Password (at least 10 characters)"><input className="field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></FormField>
-        <button className="btn" type="submit">{mode === 'login' ? 'Sign in' : 'Create account'}</button>
+        <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
       </form>
       <p>{mode === 'login' ? <>New here? <Link to="/register">Create an account</Link></> : <>Already have an account? <Link to="/login">Sign in</Link></>}</p>
       <p><small>Password reset by email is not available yet — no email provider has been chosen (R3). If you lose your password, this build has no recovery path yet; that is a known Phase 1A limitation, not a hidden one.</small></p>
@@ -833,27 +885,204 @@ export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onS
   );
 }
 
-export function SpacePage({ me, onSpaceChange }: { me: Me; onSpaceChange: () => void }) {
+/** Create-a-space and join-with-invitation forms, shared by SpacePage
+ * and WelcomePage: one implementation, same API calls, same behaviour.
+ * On success the caller is taken to /welcome so step 3 is seen. */
+export function SpaceForms({ onSpaceChange }: { onSpaceChange: () => Promise<void> }) {
   const [name, setName] = useState('A Little Place Called Us');
   const [token, setToken] = useState('');
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [joining, setJoining] = useState(false);
   const navigate = useNavigate();
   return (
-    <Page title="Your space" subtitle="One space, two people. An invitation token is shown once — share it directly with your partner, and it cannot be reused after they join." backHome>
+    <div>
       <ErrorBox message={error} />
       {notice && <p className="notice">{notice}</p>}
-      <form onSubmit={async (e) => { e.preventDefault(); setError(null); try { await api('/spaces', { method: 'POST', body: { name } }); setNotice('Space created.'); onSpaceChange(); navigate('/'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not create a space'); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <form onSubmit={async (e) => { e.preventDefault(); if (creating) return; setError(null); setCreating(true); try { await api('/spaces', { method: 'POST', body: { name } }); setNotice('Space created.'); await onSpaceChange(); navigate('/welcome'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not create a space'); } finally { setCreating(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <FormField label="Space name"><input className="field" value={name} onChange={(e) => setName(e.target.value)} /></FormField>
-        <button className="btn" type="submit">Create a space</button>
+        <button className="btn" type="submit" disabled={creating}>{creating ? 'Saving…' : 'Create a space'}</button>
       </form>
-      <form onSubmit={async (e) => { e.preventDefault(); setError(null); try { await api('/spaces/invitations/join', { method: 'POST', body: { token } }); setNotice('Joined!'); onSpaceChange(); navigate('/'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not join'); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem' }}>
+      <form onSubmit={async (e) => { e.preventDefault(); if (joining) return; setError(null); setJoining(true); try { await api('/spaces/invitations/join', { method: 'POST', body: { token } }); setNotice('Joined!'); await onSpaceChange(); navigate('/welcome'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not join'); } finally { setJoining(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem' }}>
         <FormField label="Invitation token"><input className="field" value={token} onChange={(e) => setToken(e.target.value)} /></FormField>
-        <button className="btn secondary" type="submit">Join a space</button>
+        <button className="btn secondary" type="submit" disabled={joining}>{joining ? 'Saving…' : 'Join a space'}</button>
       </form>
       <p><small>Invitation tokens are long, single-use tokens in Phase 1A. A short-code option is still undecided (R4).</small></p>
+    </div>
+  );
+}
+
+export function SpacePage({ me, onSpaceChange }: { me: Me; onSpaceChange: () => Promise<void> }) {
+  void me;
+  return (
+    <Page title="Your space" subtitle="One space, two people. An invitation token is shown once — share it directly with your partner, and it cannot be reused after they join." backHome>
+      <SpaceForms onSpaceChange={onSpaceChange} />
     </Page>
+  );
+}
+
+export function WelcomePage({ me, space, onSpaceChange }: { me: Me; space: Space | null; onSpaceChange: () => Promise<void> }) {
+  const navigate = useNavigate();
+  const [prefs, setPrefs] = useState<Preferences | null>(null);
+  const [loadingPrefs, setLoadingPrefs] = useState(true);
+  const [finishError, setFinishError] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getPreferences()
+      .then((data) => { if (!cancelled) setPrefs({ ...DEFAULT_PREFERENCES, ...data }); })
+      .catch(() => { if (!cancelled) setPrefs(null); })
+      .finally(() => { if (!cancelled) setLoadingPrefs(false); });
+    return () => { cancelled = true; };
+  }, []);
+  // Returning users skip onboarding: a seen flag sends them home.
+  if (!loadingPrefs && prefs?.onboardingSeen) return <Navigate to="/" replace />;
+  const takeMeHome = async () => {
+    if (finishing) return;
+    setFinishError(null);
+    setFinishing(true);
+    try {
+      const base = prefs ?? DEFAULT_PREFERENCES;
+      await savePreferences({ ...base, onboardingSeen: true });
+      navigate('/');
+    } catch (err) {
+      setFinishError(err instanceof Error ? err.message : 'Could not save');
+    } finally {
+      setFinishing(false);
+    }
+  };
+  return (
+    <Page title="Welcome to your little place" subtitle="Three short steps, and then you are home.">
+      {loadingPrefs && <LoadingState label="Loading your welcome…" />}
+      <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+        <h2 style={{ marginTop: 0 }}>1 · Your account is ready</h2>
+        <p>You are already signed in as {me.displayName} ({me.email}) — no credentials are asked again here. This place is made for two partner accounts, each registering themselves; nobody else is added for you.</p>
+        <p><span role="img" aria-label="Complete">✓</span> Done</p>
+      </section>
+      <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+        <h2 style={{ marginTop: 0 }}>2 · Your space</h2>
+        {space ? (
+          <p><span role="img" aria-label="Complete">✓</span> Done — you are in the space “{space.name}”.</p>
+        ) : (
+          <p>Create a space, or join one with an invitation token from your partner.</p>
+        )}
+        {!space && <SpaceForms onSpaceChange={onSpaceChange} />}
+      </section>
+      <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+        <h2 style={{ marginTop: 0 }}>3 · Welcome — how this place works</h2>
+        <p><strong>Shared areas</strong> — memories, published letters, appreciation cards, and future plans. Both partners see these.</p>
+        <p><strong>Private areas</strong> — your drafts and journals. Only you see these; your partner cannot see them, count them, or guess their titles.</p>
+        <p><strong>Scheduled letters</strong> — sealed until their release date. They open only when that date arrives, judged by the server&apos;s clock.</p>
+        <ErrorBox message={finishError} />
+        <button className="btn" type="button" onClick={() => void takeMeHome()} disabled={finishing}>{finishing ? 'Saving…' : 'Take me Home'}</button>
+      </section>
+    </Page>
+  );
+}
+
+function PreferencesSection() {
+  const [prefs, setPrefs] = useState<Preferences | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const load = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await getPreferences();
+      setPrefs({ ...DEFAULT_PREFERENCES, ...data });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load preferences');
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  if (loading) return (
+    <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <h3 style={{ marginTop: 0 }}>Preferences</h3>
+      <LoadingState label="Loading preferences…" />
+    </section>
+  );
+  if (loadError || !prefs) return (
+    <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <h3 style={{ marginTop: 0 }}>Preferences</h3>
+      <ErrorBox message={loadError ?? 'Could not load preferences'} />
+      <button className="btn" type="button" onClick={() => void load()}>Try again</button>
+    </section>
+  );
+  const motionOptions: { value: MotionPreference; label: string }[] = [
+    { value: 'system', label: 'Follow my device (recommended)' },
+    { value: 'reduce', label: 'Reduce motion' },
+    { value: 'full', label: 'Full motion' },
+  ];
+  return (
+    <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <h3 style={{ marginTop: 0 }}>Preferences</h3>
+      <ErrorBox message={saveError} />
+      {saved && <p className="notice" role="status">Preferences saved.</p>}
+      <form onSubmit={async (e) => { e.preventDefault(); if (saving) return; setSaveError(null); setSaved(false); setSaving(true); try { const updated = await savePreferences(prefs); setPrefs({ ...DEFAULT_PREFERENCES, ...updated }); applyMotionPreference(updated.motion); setSaved(true); } catch (err) { setSaveError(err instanceof Error ? err.message : 'Could not save preferences'); } finally { setSaving(false); } }}>
+        <fieldset style={{ border: 0, padding: 0, margin: '0 0 1rem' }}>
+          <legend style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Motion</legend>
+          {motionOptions.map((o) => (
+            <label key={o.value} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <input type="radio" name="motion" value={o.value} checked={prefs.motion === o.value} onChange={() => setPrefs({ ...prefs, motion: o.value })} />
+              {o.label}
+            </label>
+          ))}
+        </fieldset>
+        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
+          <input type="checkbox" checked={prefs.soundEnabled} onChange={(e) => setPrefs({ ...prefs, soundEnabled: e.target.checked })} />
+          Arcade sound
+        </label>
+        <p><small>This is the same preference the arcade uses: turning it on here turns the Secret Arcade sound on, and vice versa. Sound stays off unless you turn it on.</small></p>
+        <p><small>Preferences are saved to your account and follow you to another device.</small></p>
+        <button className="btn" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save preferences'}</button>
+      </form>
+    </section>
+  );
+}
+
+function ExportSection({ space }: { space: Space }) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
+  const download = async () => {
+    if (downloading) return;
+    setError(null);
+    setDownloaded(false);
+    setDownloading(true);
+    try {
+      const raw = await api<Record<string, unknown>>(`/spaces/${space.id}/export`, { raw: true });
+      const data = (raw as { data?: unknown }).data ?? raw;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `little-place-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setDownloaded(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not download the export');
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return (
+    <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <h3 style={{ marginTop: 0 }}>Export / back up</h3>
+      <ErrorBox message={error} />
+      {downloaded && <p className="notice" role="status">Export downloaded.</p>}
+      <p>This export contains shared records only. Private drafts and private journals are never included, and scheduled letters appear only after their release date.</p>
+      <button className="btn" type="button" onClick={() => void download()} disabled={downloading}>{downloading ? 'Preparing…' : 'Download export'}</button>
+      {error && <>{' '}<button className="btn quiet" type="button" onClick={() => void download()} disabled={downloading}>Try again</button></>}
+    </section>
   );
 }
 
@@ -864,19 +1093,23 @@ export function SettingsPage({ me, space, onSignedOut }: { me: Me; space: Space 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const isOwner = space?.members.find((m) => m.id === me.id)?.role === 'owner';
   return (
     <Page title="Settings" subtitle="Your profile, your sessions, and your space's invitations." backHome>
       <ErrorBox message={error} />
       {notice && <p className="notice">{notice}</p>}
-      <form onSubmit={async (e) => { e.preventDefault(); try { await api('/auth/me', { method: 'PATCH', body: { displayName } }); setNotice('Profile saved.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <form onSubmit={async (e) => { e.preventDefault(); if (savingProfile) return; setSavingProfile(true); try { await api('/auth/me', { method: 'PATCH', body: { displayName } }); setNotice('Profile saved.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); } finally { setSavingProfile(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <FormField label="Display name"><input className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></FormField>
-        <button className="btn" type="submit">Save profile</button>
+        <button className="btn" type="submit" disabled={savingProfile}>{savingProfile ? 'Saving…' : 'Save profile'}</button>
       </form>
-      <form onSubmit={async (e) => { e.preventDefault(); try { const data = await api<{ csrfToken: string }>('/auth/password-change', { method: 'POST', body: { password: newPassword } }); setCsrf(data.csrfToken); setNotice('Password changed. Other sessions were signed out.'); setNewPassword(''); } catch (err) { setError(err instanceof Error ? err.message : 'Could not change password'); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <form onSubmit={async (e) => { e.preventDefault(); if (changingPassword) return; setChangingPassword(true); try { const data = await api<{ csrfToken: string }>('/auth/password-change', { method: 'POST', body: { password: newPassword } }); setCsrf(data.csrfToken); setNotice('Password changed. Other sessions were signed out.'); setNewPassword(''); } catch (err) { setError(err instanceof Error ? err.message : 'Could not change password'); } finally { setChangingPassword(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <FormField label="New password (at least 10 characters)"><input className="field" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></FormField>
-        <button className="btn" type="submit">Change password</button>
+        <button className="btn" type="submit" disabled={changingPassword}>{changingPassword ? 'Saving…' : 'Change password'}</button>
       </form>
+      <PreferencesSection />
+      {space && <ExportSection space={space} />}
       {space && isOwner && (
         <div className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>Invitations</h3>

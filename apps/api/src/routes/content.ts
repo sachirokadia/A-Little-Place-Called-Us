@@ -312,9 +312,19 @@ function makeRoutes(kind: ContentKind, createSchema: ZodSchema<unknown>, updateS
         const id = req.params.id ?? '';
         const row = await d.findFirst({ where: { id, deletedAt: null } });
         if (!row) throw notFound();
-        // Favourite is allowed for any space member (shared item);
-        // the row itself is not edited, so this is not partner editing.
+        // Favourite hardening (Phase 5): the row must be one the
+        // caller can actually see under the existing visibility
+        // rules, not merely one that exists in some space. For the
+        // favouritable kinds (memory, appreciation, plan, reminder)
+        // visibilityWhere is space + non-deleted, but routing the
+        // check through it means any future private variant is
+        // automatically protected too. Invisible rows get the
+        // generic 404 with no content leak.
         await requireSpaceMember(req.user.id, row.spaceId as string);
+        const visible = await d.findFirst({
+          where: { id, ...visibilityWhere(kind, row.spaceId as string, req.user.id, false) },
+        });
+        if (!visible) throw notFound();
         const existing = await prisma.favorite.findUnique({ where: { userId_resourceType_resourceId: { userId: req.user.id, resourceType: kind, resourceId: id } } });
         if (existing) {
           await prisma.favorite.delete({ where: { id: existing.id } });

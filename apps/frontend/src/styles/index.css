@@ -244,6 +244,18 @@ label { display: block; font-size: 0.9rem; margin-bottom: var(--space-1); }
   .layout-scrapbook .list-grid > * { transform: none; }
 }
 
+/* Account "Reduce motion" preference (body.reduce-motion, set only
+   when motion === 'reduce'): mirrors the OS reduced-motion behaviour
+   above, regardless of the device setting. */
+body.reduce-motion, body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+body.reduce-motion .breathing-circle, body.reduce-motion .loading-dots { animation: none !important; }
+body.reduce-motion .layout-scrapbook .list-grid > * { transform: none; }
+
 /* Appreciations — framed gallery. */
 .layout-gallery .list-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .layout-gallery .paper {

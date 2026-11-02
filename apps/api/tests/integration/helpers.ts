@@ -87,5 +87,6 @@ export async function cleanDb(): Promise<void> {
   await prisma.rateLimitBucket.deleteMany();
   await prisma.idempotencyKey.deleteMany();
   await prisma.passwordResetToken.deleteMany();
+  await prisma.userPreference.deleteMany();
   await prisma.user.deleteMany();
 }

@@ -81,6 +81,7 @@ model User {
   reminders    Reminder[]
   voiceNotes   VoiceNote[]
   favorites    Favorite[]
+  preference   UserPreference?
   auditEvents  AuditEvent[] @relation("AuditActor")
   idempotencyKeys IdempotencyKey[]
   gameProgress GameProgress[]
@@ -341,6 +342,23 @@ model Favorite {
 
   @@unique([userId, resourceType, resourceId])
   @@index([userId, resourceType])
+}
+
+// Phase 5: per-user display preferences. One row per user, always
+// scoped to the session caller — there is no endpoint that takes
+// another user's id. motion 'system' means the frontend defers to
+// the OS prefers-reduced-motion setting; 'reduce' is an explicit
+// user override and never silently falls back to full motion.
+// soundEnabled defaults OFF.
+model UserPreference {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  motion         String   @default("system")
+  soundEnabled   Boolean  @default(false)
+  onboardingSeen Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model AuditEvent {

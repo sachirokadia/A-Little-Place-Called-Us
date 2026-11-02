@@ -22,7 +22,9 @@ async function fetchCsrf(): Promise<string> {
   }
 }
 
-export async function api<T>(path: string, options: { method?: string; body?: unknown; form?: FormData } = {}): Promise<T> {
+export interface ApiOptions { method?: string; body?: unknown; form?: FormData; idempotencyKey?: string; raw?: boolean }
+
+export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const doFetch = async (token: string | null): Promise<Response> => {
     const headers: Record<string, string> = {};
@@ -32,6 +34,7 @@ export async function api<T>(path: string, options: { method?: string; body?: un
       headers['Content-Type'] = 'application/json';
     }
     if (method !== 'GET' && token) headers['X-CSRF-Token'] = token;
+    if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
     return fetch(`/api/v1${path}`, {
       method,
       credentials: 'include',
@@ -53,6 +56,9 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     const message = (body as { error?: { message?: string } }).error?.message ?? `Request failed (${res.status})`;
     throw new Error(message);
   }
+  // raw: return the whole response body (used by the export download,
+  // which tolerates both an envelope and a bare JSON object).
+  if (options.raw) return body as T;
   return (body as { data: T }).data;
 }
 
@@ -67,6 +73,18 @@ export interface Space {
   id: string; name: string; members: { id: string; displayName: string; avatarKey: string; role: string }[];
 }
 export type AnyItem = Record<string, unknown> & { id: string; authorId: string; title?: string; text?: string; body?: string };
+
+export type MotionPreference = 'system' | 'reduce' | 'full';
+export interface Preferences { motion: MotionPreference; soundEnabled: boolean; onboardingSeen: boolean }
+export const DEFAULT_PREFERENCES: Preferences = { motion: 'system', soundEnabled: false, onboardingSeen: false };
+export const getPreferences = () => api<Preferences>('/auth/preferences');
+export const savePreferences = (prefs: Preferences) => api<Preferences>('/auth/preferences', { method: 'PUT', body: prefs });
+/** Apply the motion preference to the page: only 'reduce' adds the class.
+ * 'system' leaves it to the OS media query; 'full' never adds it. */
+export function applyMotionPreference(motion: MotionPreference): void {
+  if (typeof document === 'undefined') return;
+  document.body.classList.toggle('reduce-motion', motion === 'reduce');
+}
 
 export const getMe = () => api<Me>('/auth/me');
 export const getSpace = () => api<Space | null>('/spaces/me');

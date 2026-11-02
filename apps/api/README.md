@@ -105,6 +105,37 @@ generate` / `prisma migrate deploy` work without this.
   Browser end-to-end tests (spec §8.1) are NOT done in 1A —
   that is a Phase 1C item, and no browser claim is made here.
 
+## Export and preferences (Phase 5)
+
+- Export: `GET /spaces/:spaceId/export` (session-authenticated,
+  space-membership enforced; a non-member gets a generic 404).
+  Returns JSON (`application/json`; the frontend downloads it as a
+  file) with `spaceId`, `spaceName`, `exportedAt` (server time),
+  `exportNote`, and only shared, non-deleted records: `memories`
+  (with an active-media count per memory, never a storage key or
+  URL), `letters` (shared, or scheduled with `revealAt <= now` on
+  server time), `appreciations`, `plans` (with an active-media
+  count), and `reminders` (shared notes; they have no private
+  variant). Private draft letters of anyone, undelivered scheduled
+  letters, private journals, and voice notes are excluded at the
+  query level — they do not appear in any count either.
+- Preferences: `GET /auth/preferences` and `PUT /auth/preferences`
+  (model `UserPreference`, one row per user, migration
+  `20251103000000_user_preferences`). GET creates the default row
+  on first read. PUT uses strict validation: `motion` must be
+  exactly `system` | `reduce` | `full`, `soundEnabled` and
+  `onboardingSeen` booleans; unknown fields — including a
+  body-supplied `userId` — are rejected, and the row is always
+  scoped to the session caller. Defaults: `motion: 'system'`
+  (the frontend defers to the OS `prefers-reduced-motion`
+  setting; a user-set `reduce` overrides it), `soundEnabled:
+  false` (sound is OFF by default), `onboardingSeen: false`.
+- Favourite hardening: `POST /:id/favourite` now only succeeds
+  for a row the caller can see under the existing visibility
+  rules; an invisible row (soft-deleted, or in a space the
+  caller is not a member of) returns a generic 404. No other
+  content route behaviour changed.
+
 ## GameProgress (Phase 4, Secret Arcade)
 
 Per-player only — no scores, leaderboards, or rankings endpoint.

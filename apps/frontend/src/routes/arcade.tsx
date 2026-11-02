@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, listItems, type Space } from '../lib/api.js';
+import { api, DEFAULT_PREFERENCES, getPreferences, listItems, savePreferences, type Preferences, type Space } from '../lib/api.js';
 import { Page } from '../components/ui.js';
 import styles from './arcade.module.css';
 import {
@@ -110,8 +110,27 @@ function useGameProgress<T>(spaceId: string, key: string, initial: T) {
 // ---------------------------------------------------------------------------
 
 function useSound() {
+  // Sound preference: the server preference first, OFF by default.
+  // If the server read fails, fall back to the existing local
+  // behaviour (this device only) and say so honestly in the UI.
   const [enabled, setEnabled] = useState(false);
+  const [serverPrefs, setServerPrefs] = useState<Preferences | null>(null);
+  const [serverFailed, setServerFailed] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPreferences()
+      .then((data) => {
+        if (cancelled) return;
+        const prefs = { ...DEFAULT_PREFERENCES, ...data };
+        setServerFailed(false);
+        setServerPrefs(prefs);
+        setEnabled(prefs.soundEnabled);
+      })
+      .catch(() => { if (!cancelled) setServerFailed(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   const close = useCallback(() => {
     const ctx = ctxRef.current;
@@ -122,11 +141,18 @@ function useSound() {
   useEffect(() => () => { close(); }, [close]);
 
   const toggle = useCallback(() => {
-    setEnabled((prev) => {
-      if (prev) close();
-      return !prev;
-    });
-  }, [close]);
+    const next = !enabled;
+    if (enabled) close();
+    setEnabled(next);
+    if (serverPrefs) {
+      const updated = { ...serverPrefs, soundEnabled: next };
+      savePreferences(updated)
+        .then((data) => setServerPrefs({ ...DEFAULT_PREFERENCES, ...data }))
+        .catch(() => setServerFailed(true));
+    } else {
+      setServerFailed(true);
+    }
+  }, [close, serverPrefs, enabled]);
 
   const play = useCallback((kind: 'flip' | 'match' | 'win') => {
     if (!enabled) return;
@@ -153,7 +179,7 @@ function useSound() {
     } catch { /* sound is optional */ }
   }, [enabled]);
 
-  return { enabled, toggle, play };
+  return { enabled, toggle, play, serverFailed };
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -700,6 +726,7 @@ export function ArcadeContent({ space }: { space: Space }) {
             Sound: {sound.enabled ? 'on' : 'off'}
           </button>
           <p style={{ margin: 0 }}>Sound is off by default. Turn it on for gentle blips when cards flip, match, or a game is won.</p>
+          {sound.serverFailed && <p style={{ margin: 0 }}><small>Sound preference could not be loaded from your account, so this setting is saved on this device only for now.</small></p>}
         </div>
 
         {localOnly && (
