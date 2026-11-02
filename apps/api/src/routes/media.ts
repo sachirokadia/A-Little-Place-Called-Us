@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { prisma } from '../db.js';
 import { badRequest, notFound, unauthorized } from '../errors.js';
 import { audit } from '../lib/audit.js';
-import { ALLOWED_AUDIO_TYPES, ALLOWED_IMAGE_TYPES, processUpload } from '../lib/media.js';
+import { ALLOWED_AUDIO_TYPES, ALLOWED_IMAGE_TYPES, displayVariant, processUpload } from '../lib/media.js';
 import { requireSpaceMember } from '../lib/membership.js';
 import { storage } from '../lib/storage.js';
 import { checkRateLimit, RATE_LIMITS, uploadUserKey } from '../lib/rateLimit.js';
@@ -121,6 +121,23 @@ mediaRouter.get('/media/:id', async (req, res, next) => {
     }
     if (!spaceId) throw notFound();
     await requireSpaceMember(req.user.id, spaceId);
+    // Display-size variant: same auth/visibility checks as the full
+    // stream (all of the above), same Cache-Control, same MIME type.
+    // Only the bytes change: a sharp resize for still images, GIFs
+    // unchanged. The stored original and storage key are untouched.
+    if (req.query.size === 'display' && asset.mimeType.startsWith('image/')) {
+      const stream = await storage().stream(asset.storageKey);
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+      const original = Buffer.concat(chunks);
+      const display = await displayVariant(original, asset.mimeType);
+      res.setHeader('Content-Type', asset.mimeType);
+      res.setHeader('Content-Length', String(display.length));
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.send(display);
+      await audit('media.stream', 'media', asset.id, { actorId: req.user.id, spaceId, outcome: 'success' });
+      return;
+    }
     const stream = await storage().stream(asset.storageKey);
     res.setHeader('Content-Type', asset.mimeType);
     res.setHeader('Content-Length', String(asset.byteSize));

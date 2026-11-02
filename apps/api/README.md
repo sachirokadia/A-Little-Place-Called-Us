@@ -92,6 +92,16 @@ local directory tree, serve it on localhost, and run Prisma with
 for the binaries). In a normal environment, plain `prisma
 generate` / `prisma migrate deploy` work without this.
 
+2026-11-02 note (shared-rooms work): Node engine downloads still
+failed in this sandbox (`ECONNRESET`, even with the egress CA
+supplied via `NODE_EXTRA_CA_CERTS`), so `prisma migrate deploy`
+could not run. The disposable test database was instead built by
+applying the three versioned `prisma/migrations/*/migration.sql`
+files directly with `psql`, in order — the same schema, no
+migration invented, and the already-generated Prisma client was
+used unchanged for the test run. That fallback is for disposable
+test databases only; production still uses `prisma migrate deploy`.
+
 ## Tests
 
 - Unit: `npm run test:unit` (no database).

@@ -4,7 +4,7 @@ import { applyMotionPreference, getMe, getPreferences, getSpace, setCsrf, type M
 import { LoadingState } from './components/ui.js';
 import {
   AppreciationsPage, ArcadePage, AuthPage, DeletedPage, FavouritesPage, FuturePage,
-  HomePage, LettersPage, MemoriesPage, NotFoundPage, QuietPage, SettingsPage, SpacePage, WelcomePage,
+  HomePage, LettersPage, MemoriesPage, NotFoundPage, QuietPage, RemindersPage, SettingsPage, SpacePage, WelcomePage,
 } from './routes/pages.js';
 
 const DESTINATIONS = [
@@ -13,6 +13,7 @@ const DESTINATIONS = [
   { to: '/quiet', label: 'Quiet Room' },
   { to: '/appreciations', label: 'Things I See in You' },
   { to: '/future', label: 'Our Future' },
+  { to: '/reminders', label: 'Reminder Room' },
   { to: '/arcade', label: 'Secret Arcade' },
 ];
 
@@ -90,6 +91,7 @@ export default function App() {
         <Route path="/appreciations" element={signedIn && space ? <AppreciationsPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/appreciations/favourites" element={signedIn && space ? <FavouritesPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/future" element={signedIn && space ? <FuturePage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
+        <Route path="/reminders" element={signedIn && space ? <RemindersPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/arcade" element={signedIn && space ? <ArcadePage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/deleted" element={signedIn && space ? <DeletedPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/settings" element={signedIn ? <SettingsPage me={me} space={space} onSignedOut={() => { setMe(null); setSpace(null); setCsrf(null); }} /> : signedOut} />

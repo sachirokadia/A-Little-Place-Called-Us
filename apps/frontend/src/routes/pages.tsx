@@ -39,6 +39,22 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
     for (const key of ['title', 'caption', 'story', 'body', 'text', 'detail', 'forName', 'mood', 'location', 'category']) {
       if (typeof item[key] === 'string') out[key] = item[key] as string;
     }
+    // Kind (reminders: note|prompt; appreciations:
+    // appreciation|achievement) is editable as a select, like the
+    // create form's kind select, rather than free text.
+    if (typeof item.kind === 'string') out.kind = item.kind as string;
+    // Memory tags: stored as an array, edited as comma-separated text.
+    if (singular === 'memory' && Array.isArray(item.tags)) {
+      out.tags = (item.tags as unknown[]).filter((t): t is string => typeof t === 'string').join(', ');
+    }
+    // Letter visibility + release: edited together so a letter can
+    // move between shared / private draft / scheduled. revealAt is
+    // converted to datetime-local form (YYYY-MM-DDTHH:mm) for the
+    // input and converted back to ISO on submit.
+    if (singular === 'letter') {
+      if (typeof item.visibility === 'string') out.visibility = item.visibility as string;
+      out.revealAt = typeof item.revealAt === 'string' ? (item.revealAt as string).slice(0, 16) : '';
+    }
     return out;
   });
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +71,16 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      await api(`/${singular}/${item.id}`, { method: 'PATCH', body: values });
+      const body: Record<string, unknown> = { ...values };
+      if ('tags' in values) {
+        body.tags = values.tags.split(',').map((t) => t.trim()).filter(Boolean);
+        // Note: tags is sent as an array (the server schema expects
+        // string[]); the text form exists only in this edit form.
+      }
+      if ('revealAt' in values) {
+        body.revealAt = values.revealAt ? new Date(values.revealAt).toISOString() : null;
+      }
+      await api(`/${singular}/${item.id}`, { method: 'PATCH', body });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
@@ -68,9 +93,23 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
     <form onSubmit={submit}>
       <ErrorBox message={error} />
       {Object.entries(values).map(([key, value]) => (
-        <FormField key={key} label={key}>
+        <FormField key={key} label={key === 'tags' ? 'Tags (comma-separated)' : key === 'revealAt' ? 'Release date and time (for scheduled letters)' : key === 'visibility' ? 'Visibility' : key}>
           {key === 'body' || key === 'story' || key === 'detail' || key === 'text' ? (
             <textarea className="field" rows={4} value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
+          ) : key === 'visibility' ? (
+            <select className="field" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })}>
+              <option value="shared">shared</option>
+              <option value="private_draft">private_draft</option>
+              <option value="scheduled">scheduled</option>
+            </select>
+          ) : key === 'kind' ? (
+            <select className="field" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })}>
+              {singular === 'reminder' ? (<><option value="note">note</option><option value="prompt">prompt</option></>)
+                : singular === 'appreciation' ? (<><option value="appreciation">appreciation</option><option value="achievement">achievement</option></>)
+                : (<option value={value}>{value}</option>)}
+            </select>
+          ) : key === 'revealAt' ? (
+            <input className="field" type="datetime-local" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
           ) : (
             <input className="field" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
           )}
@@ -128,6 +167,23 @@ function ItemCard({ item, singular, me, onRefresh, extra, envelopeMode, polaroid
     <Card>
       <ErrorBox message={error} />
       <h3 style={{ marginTop: 0 }}>{title}</h3>
+      {typeof item.visibility === 'string' && singular === 'letter' ? (
+        <p className="visibility-line"><small>
+          {item.visibility === 'shared' ? 'Shared — both partners can read this'
+            : item.visibility === 'private_draft' ? 'Private draft — only you can see this'
+            : item.visibility === 'scheduled' && item.revealAt && (item.revealAt as string) > new Date().toISOString()
+              ? `Scheduled — opens on ${(item.revealAt as string).replace('T', ' ').slice(0, 16)}`
+              : item.visibility === 'scheduled' ? 'Delivered — was scheduled, now open'
+              : item.visibility as string}
+        </small></p>
+      ) : null}
+      {Array.isArray(item.tags) && (item.tags as unknown[]).length > 0 ? (
+        <p className="tag-row" aria-label="Tags">
+          {(item.tags as unknown[]).filter((t): t is string => typeof t === 'string').map((t) => (
+            <span key={t} className="tag-chip">{t}</span>
+          ))}
+        </p>
+      ) : null}
       {item.caption ? <p className={polaroidMode ? 'polaroid-caption' : undefined}>{item.caption as string}</p> : null}
       {galleryNode}
       {!galleryMode && bodyNode}
@@ -137,7 +193,7 @@ function ItemCard({ item, singular, me, onRefresh, extra, envelopeMode, polaroid
       {item.happenedOn ? <p><small>Date: {fmtDate(item.happenedOn)}</small></p> : null}
       {polaroidMode && item.happenedOn ? <div className="ticket-stub" aria-hidden="true"><span>✂ ticket</span><span>{fmtDate(item.happenedOn)}</span></div> : null}
       {item.targetDate ? <p><small>Planned for: {fmtDate(item.targetDate)}</small></p> : null}
-      {item.visibility === 'scheduled' && item.revealAt ? <p><small>Sealed until {(item.revealAt as string).replace('T', ' ').slice(0, 16)}</small></p> : null}
+      {item.visibility === 'scheduled' && item.revealAt && (item.revealAt as string) > new Date().toISOString() ? <p><small>Sealed until {(item.revealAt as string).replace('T', ' ').slice(0, 16)}</small></p> : null}
       {item.status ? <p><small>Status: {item.status as string}</small></p> : null}
       {item.kind ? <p><span className="quality-badge">{item.kind as string}</span>{item.forName ? <span> · for {item.forName as string}</span> : null}</p> : null}
       {extra}
@@ -215,7 +271,7 @@ function CreateForm({ fields, onCreate, submitLabel = 'Add' }: { fields: { name:
   );
 }
 
-export function ListPage({ me, space, plural, singular, title, subtitle, createFields, onCreate, extraForItem, favouritedOnly = false, layout, groupBy, sortByTargetDate = false, pageClassName, envelopeMode, polaroidMode, galleryMode, headerExtra, filterFn, emptyTitle, emptyMessage, onCreated }: {
+export function ListPage({ me, space, plural, singular, title, subtitle, createFields, onCreate, extraForItem, favouritedOnly = false, layout, groupBy, sortByTargetDate = false, pageClassName, envelopeMode, polaroidMode, galleryMode, headerExtra, filterFn, filterBar, emptyTitle, emptyMessage, onCreated }: {
   me: Me; space: Space; plural: string; singular: string; title: string; subtitle: string;
   createFields: { name: string; label: string; kind?: 'text' | 'textarea' | 'date' | 'datetime-local' | 'select'; options?: string[] }[];
   onCreate: (spaceId: string, values: Record<string, string>, idempotencyKey?: string) => Promise<void>;
@@ -230,6 +286,9 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
   galleryMode?: boolean;
   headerExtra?: React.ReactNode;
   filterFn?: (item: AnyItem) => boolean;
+  // Optional filter UI built from the loaded items (e.g. Memory Wall
+  // tag chips). Rendered above the list once items have loaded.
+  filterBar?: (items: AnyItem[]) => React.ReactNode;
   emptyTitle?: string;
   emptyMessage?: string;
   onCreated?: () => void;
@@ -291,6 +350,7 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
     <Page title={title} subtitle={subtitle} backHome className={pageCls}>
       {headerExtra}
       {createFields.length > 0 && <CreateForm fields={createFields} onCreate={async (v, key) => { await onCreate(space.id, v, key); await refresh(); onCreated?.(); }} />}
+      {!loading && !error && filterBar ? filterBar(items) : null}
       {error ? <ErrorState message={error} onRetry={refresh} />
         : loading ? <LoadingState />
         : visible.length === 0 ? <EmptyState title={emptyTitle} message={emptyMessage} />
@@ -309,7 +369,13 @@ function MediaStrip({ linkedType, linkedId }: { linkedType: string; linkedId: st
     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
       {assets.map((a) => (
         (a.mimeType as string)?.startsWith('image/') ? (
-          <img key={a.id} src={`/api/v1/media/${a.id}`} alt="Memory photo" className="polaroid-photo" style={{ maxWidth: 220 }} />
+          // Display-size variant (?size=display): same auth/visibility
+          // checks as the full stream, aspect preserved, max 1200px
+          // on the longest side. width/height come from the stored
+          // asset dimensions so the browser reserves the right ratio
+          // and layout shift stays small. Proportions are never
+          // cropped: .polaroid-photo has no object-fit / fixed height.
+          <img key={a.id} src={`/api/v1/media/${a.id}?size=display`} alt="Memory photo" className="polaroid-photo" style={{ maxWidth: 220 }} loading="lazy" decoding="async" width={typeof a.width === 'number' ? a.width : undefined} height={typeof a.height === 'number' ? a.height : undefined} />
         ) : (
           <audio key={a.id} controls src={`/api/v1/media/${a.id}`} />
         )
@@ -324,10 +390,30 @@ function UploadForm({ linkedType, linkedId, onDone }: { linkedType: string; link
   const [submitting, setSubmitting] = useState(false);
   const [spaceId, setSpaceId] = useState<string>('');
   useEffect(() => { getSpace().then((s) => setSpaceId(s?.id ?? '')).catch(() => undefined); }, []);
+  // Client-side checks mirror the server ALLOWED lists and size
+  // caps (photos 10 MB, audio 25 MB) so a bad file fails fast with
+  // a friendly message. The server remains authoritative: its
+  // errors still surface below if a check is ever bypassed.
+  const validateFile = (f: File): string | null => {
+    const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const audioTypes = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/mp4'];
+    const type = f.type.toLowerCase();
+    if (imageTypes.includes(type)) {
+      if (f.size > 10 * 1024 * 1024) return 'That photo is over 10 MB — please choose a smaller photo.';
+      return null;
+    }
+    if (audioTypes.includes(type)) {
+      if (f.size > 25 * 1024 * 1024) return 'That audio file is over 25 MB — please choose a shorter or smaller recording.';
+      return null;
+    }
+    return 'That file type is not supported — please choose a photo (JPEG, PNG, WebP, GIF) or audio (MP3, WAV, WebM, OGG, M4A).';
+  };
   return (
     <form onSubmit={async (e) => {
       e.preventDefault();
       if (!file || !spaceId || submitting) return;
+      const clientError = validateFile(file);
+      if (clientError) { setError(clientError); return; }
       setError(null);
       setSubmitting(true);
       const form = new FormData();
@@ -345,13 +431,14 @@ function UploadForm({ linkedType, linkedId, onDone }: { linkedType: string; link
       }
     }}>
       <ErrorBox message={error} />
-      <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />{' '}
+      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,audio/mpeg,audio/wav,audio/webm,audio/ogg,audio/mp4" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />{' '}
       <button className="btn quiet" type="submit" disabled={!file || submitting}>{submitting ? 'Uploading…' : 'Upload'}</button>
     </form>
   );
 }
 
 export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
+  const [tagFilter, setTagFilter] = useState('');
   return (
     <ListPage
       me={me} space={space} plural="memories" singular="memory" layout="scrapbook" groupBy="date-year" polaroidMode
@@ -363,8 +450,22 @@ export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
         { name: 'caption', label: 'Caption', kind: 'textarea' },
         { name: 'story', label: 'Journal entry', kind: 'textarea' },
         { name: 'happenedOn', label: 'Date it happened', kind: 'date' },
+        { name: 'tags', label: 'Tags (comma-separated, optional)' },
       ]}
-      onCreate={async (spaceId, v, key) => { await api(`/spaces/${spaceId}/memories`, { method: 'POST', body: { title: v.title, caption: v.caption ?? '', story: v.story ?? '', happenedOn: v.happenedOn || null }, idempotencyKey: key }); }}
+      onCreate={async (spaceId, v, key) => { await api(`/spaces/${spaceId}/memories`, { method: 'POST', body: { title: v.title, caption: v.caption ?? '', story: v.story ?? '', happenedOn: v.happenedOn || null, tags: (v.tags ?? '').split(',').map((t) => t.trim()).filter(Boolean) }, idempotencyKey: key }); }}
+      filterFn={tagFilter ? (i) => Array.isArray(i.tags) && (i.tags as unknown[]).includes(tagFilter) : undefined}
+      filterBar={(loaded) => {
+        const tags = Array.from(new Set(loaded.flatMap((i) => Array.isArray(i.tags) ? (i.tags as unknown[]).filter((t): t is string => typeof t === 'string') : []))).sort();
+        if (tags.length === 0) return null;
+        return (
+          <div className="chip-row" role="group" aria-label="Filter memories by tag">
+            <button className={`chip${!tagFilter ? ' active' : ''}`} type="button" onClick={() => setTagFilter('')}>All tags</button>
+            {tags.map((t) => (
+              <button key={t} className={`chip${tagFilter === t ? ' active' : ''}`} type="button" onClick={() => setTagFilter(t)}>{t}</button>
+            ))}
+          </div>
+        );
+      }}
       extraForItem={(item, refresh) => (
         <div>
           <MediaStrip linkedType="memory" linkedId={item.id} />
@@ -402,10 +503,25 @@ export function LettersPage({ me, space }: { me: Me; space: Space }) {
   );
 }
 
+// Quiet Room gentle prompts: a short, fixed, built-in list stored
+// once in code. NOT database content, NOT user content, NOT a
+// message from either partner — the label in the UI says so plainly.
+// Cycling is client-side only; nothing is written, counted, or
+// required, and the section never autoplays or animates.
+const GENTLE_THOUGHTS = [
+  'You do not have to finish anything here. Sitting quietly counts.',
+  'A small kindness to yourself today is enough.',
+  'Breathe out a little longer than you breathed in, if that feels good.',
+  'Whatever today held, you made room for a quiet moment — that matters.',
+  'There is no rush to feel better. You can simply be here for a while.',
+  'Notice one soft thing around you: light, warmth, a familiar sound.',
+];
+
 export function QuietPage({ me, space }: { me: Me; space: Space }) {
   const { items, error, loading, refresh } = useList(space.id, 'journals');
   const [breathingOn, setBreathingOn] = useState(true);
   const [rainOn, setRainOn] = useState(true);
+  const [gentleIndex, setGentleIndex] = useState(0);
   const [moodFilter, setMoodFilter] = useState('');
   const moods = Array.from(new Set(items.map((i) => (i.mood as string) ?? '').filter(Boolean)));
   const shown = moodFilter ? items.filter((i) => (i.mood as string) === moodFilter) : items;
@@ -426,6 +542,13 @@ export function QuietPage({ me, space }: { me: Me; space: Space }) {
           {breathingOn ? 'Pause the breathing animation' : 'Show the breathing animation'}
         </button>
       </div>
+      <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1.5rem' }} aria-label="A gentle thought">
+        <h2 style={{ marginTop: 0 }}>A gentle thought</h2>
+        <p><small>A gentle prompt — built-in, not a message from your partner.</small></p>
+        <p style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic', fontSize: '1.05rem' }}>{GENTLE_THOUGHTS[gentleIndex]}</p>
+        <button className="btn quiet" type="button" onClick={() => setGentleIndex((i) => (i + 1) % GENTLE_THOUGHTS.length)}>Another gentle thought</button>
+        <p><small>Optional, always — you do not have to do anything with this.</small></p>
+      </section>
       <CreateForm fields={[
         { name: 'title', label: 'Title' },
         { name: 'body', label: 'Journal entry', kind: 'textarea' },
@@ -480,11 +603,44 @@ function VoiceNotes({ space }: { space: Space }) {
   );
 }
 
+export function RemindersPage({ me, space }: { me: Me; space: Space }) {
+  const [random, setRandom] = useState<AnyItem | null>(null);
+  return (
+    <ListPage
+      me={me} space={space} plural="reminders" singular="reminder"
+      title="Reminder Room" subtitle="Little supportive notes for each other, with no reply expected. Leave one, revisit one, or let a random one find you — there is nothing to answer, no streak to keep, and no response to track."
+      emptyTitle="No reminders yet"
+      emptyMessage="This room starts empty on purpose. Leave the first supportive note below — a kind thought, a gentle prompt, a small thing to remember together. No reply is expected, ever."
+      headerExtra={(
+        <div style={{ marginBottom: '1rem' }}>
+          <button className="btn secondary" type="button" onClick={async () => { const r = await api<AnyItem | null>(`/spaces/${space.id}/reminders/random`); setRandom(r); }}>Show me a random reminder</button>
+          {random && <div style={{ marginTop: '1rem' }}><Card><p style={{ margin: 0 }}>{random.text as string}</p><p><small>{(random.kind as string) ?? 'note'} · a supportive note, no reply expected</small></p></Card></div>}
+          {!random && <p><small>Random reminders are picked only from reminders you have actually saved — never invented.</small></p>}
+        </div>
+      )}
+      createFields={[
+        { name: 'text', label: 'Reminder', kind: 'textarea' },
+        { name: 'kind', label: 'Kind', kind: 'select', options: ['note', 'prompt'] },
+      ]}
+      onCreate={async (spaceId, v, key) => { if (!(v.text ?? '').trim()) throw new Error('Please write a reminder before saving.'); await api(`/spaces/${spaceId}/reminders`, { method: 'POST', body: { text: v.text, kind: v.kind || 'note' }, idempotencyKey: key }); }}
+    />
+  );
+}
+
 export function AppreciationsPage({ me, space }: { me: Me; space: Space }) {
   const [random, setRandom] = useState<AnyItem | null>(null);
   const [kindFilter, setKindFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const { items, error, loading, refresh } = useList(space.id, 'appreciations');
-  const shown = kindFilter ? items.filter((i) => (i.kind as string) === kindFilter) : items;
+  const filtered = kindFilter ? items.filter((i) => (i.kind as string) === kindFilter) : items;
+  // Chronological browsing, client-side over the loaded cards, so it
+  // composes with the kind filter above. Default is newest first.
+  const shown = [...filtered].sort((a, b) => {
+    const ac = (a.createdAt as string) ?? '';
+    const bc = (b.createdAt as string) ?? '';
+    if (ac === bc) return sortOrder === 'newest' ? (b.id < a.id ? -1 : 1) : (a.id < b.id ? -1 : 1);
+    return sortOrder === 'newest' ? (ac < bc ? 1 : -1) : (ac < bc ? -1 : 1);
+  });
   return (
     <Page title="Things I See in You" subtitle="A gallery of little things — appreciations and moments of courage. Nothing here is scored or ranked. Open a card to revisit it in full." backHome className="layout-gallery">
       <CreateForm fields={[
@@ -496,6 +652,10 @@ export function AppreciationsPage({ me, space }: { me: Me; space: Space }) {
         <button className={`chip${!kindFilter ? ' active' : ''}`} type="button" onClick={() => setKindFilter('')}>All cards</button>
         <button className={`chip${kindFilter === 'appreciation' ? ' active' : ''}`} type="button" onClick={() => setKindFilter('appreciation')}>Appreciations</button>
         <button className={`chip${kindFilter === 'achievement' ? ' active' : ''}`} type="button" onClick={() => setKindFilter('achievement')}>Achievements</button>
+      </div>
+      <div className="chip-row" role="group" aria-label="Sort cards by date">
+        <button className={`chip${sortOrder === 'newest' ? ' active' : ''}`} type="button" onClick={() => setSortOrder('newest')}>Newest first</button>
+        <button className={`chip${sortOrder === 'oldest' ? ' active' : ''}`} type="button" onClick={() => setSortOrder('oldest')}>Oldest first</button>
       </div>
       {error ? <ErrorState message={error} onRetry={refresh} />
         : loading ? <LoadingState />
@@ -534,7 +694,7 @@ export function FuturePage({ me, space }: { me: Me; space: Space }) {
     <div>
       <ListPage
         me={me} space={space} plural="plans" singular="plan" layout="journey" sortByTargetDate
-        title="Our Future — an adventure map" subtitle="Plans are drawn as journeys, not checklists. Tap an island on the map to open its quest card. Completing one can create a scrapbook memory in the same step, so it is never duplicated."
+        title="Our Future — an adventure map" subtitle="Plans are drawn as journeys, not checklists. Target dates are hopes, not deadlines — a date can move, and the plan is still the plan. Tap an island on the map to open its quest card. Completing one can create a scrapbook memory in the same step, so it is never duplicated."
         headerExtra={(
           <div>
             <div className="future-map" aria-label="An illustrated adventure map with a winding path, islands, and food stalls">
@@ -858,6 +1018,7 @@ function RemindersSection({ space }: { space: Space }) {
   return (
     <div style={{ marginTop: '2rem' }}>
       <h2>Little reminders</h2>
+      <p><small>Supportive notes with no reply expected — just little things left for each other. <Link to="/reminders">Open the Reminder Room →</Link></small></p>
       <form onSubmit={async (e) => { e.preventDefault(); if (!text || submitting) return; setFormError(null); setSubmitting(true); try { await api(`/spaces/${space.id}/reminders`, { method: 'POST', body: { text, kind: 'note' }, idempotencyKey: crypto.randomUUID() }); setText(''); await refresh(); } catch (err) { setFormError(err instanceof Error ? err.message : 'Could not save'); } finally { setSubmitting(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <ErrorBox message={formError} />
         <FormField label="A note for both of you"><input className="field" value={text} onChange={(e) => setText(e.target.value)} /></FormField>
