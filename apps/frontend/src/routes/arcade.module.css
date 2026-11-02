@@ -1,0 +1,230 @@
+/* Secret Arcade — CSS/SVG pixel art only. Chunky pixel blocks with
+   image-rendering: pixelated; no raster images, no stock imagery.
+   All decorative figures are aria-hidden in the markup. Interactive
+   targets are at least 44px; completion animation is motion-safe only. */
+
+.wrap {
+  font-family: "Courier New", Courier, "Lucida Console", monospace;
+  color: #2b1d3a;
+}
+
+.arch {
+  background: #1d1430;
+  color: #ffe9a8;
+  border: 4px solid #0f0a1e;
+  border-radius: 1rem 1rem 0.25rem 0.25rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  box-shadow: 0 6px 0 #0f0a1e;
+  margin-bottom: 1.5rem;
+}
+
+.archTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.archText { margin: 0; line-height: 1.5; }
+
+.pixelRow {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 1.4rem;
+  line-height: 1;
+  image-rendering: pixelated;
+}
+
+.mapNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 1.5rem;
+}
+
+.mapBtn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0.6rem 1rem;
+  background: #ffe9a8;
+  border: 3px solid #1d1430;
+  border-radius: 0.25rem;
+  box-shadow: 0 3px 0 #1d1430;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  color: #1d1430;
+}
+
+.mapBtn:active { transform: translateY(2px); box-shadow: 0 1px 0 #1d1430; }
+
+.section {
+  background: #fffdf6;
+  border: 3px solid #1d1430;
+  border-radius: 0.5rem;
+  padding: 1.25rem 1rem;
+  margin-bottom: 1.5rem;
+  scroll-margin-top: 1rem;
+}
+
+.section h2 { margin-top: 0; font-size: 1.35rem; }
+.section h3 { margin-bottom: 0.25rem; }
+
+.note {
+  background: #fff3c4;
+  border: 2px solid #1d1430;
+  border-radius: 0.25rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.note p { margin: 0; }
+
+.btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0.6rem 1rem;
+  background: #7d5fc4;
+  border: 3px solid #1d1430;
+  border-radius: 0.25rem;
+  box-shadow: 0 3px 0 #1d1430;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  color: #fff;
+}
+
+.btnQuiet {
+  background: #e8dcc8;
+  color: #1d1430;
+}
+
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #1d1430; }
+
+/* Memory Match grid: 4 columns, buttons are the cards. */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(64px, 1fr));
+  gap: 0.6rem;
+  max-width: 520px;
+  margin: 1rem 0;
+}
+
+.cardBtn {
+  aspect-ratio: 1;
+  min-height: 64px;
+  min-width: 64px;
+  background: #7d5fc4;
+  border: 3px solid #1d1430;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.6rem;
+  color: #fff;
+}
+
+.cardBtnRevealed { background: #ffe9a8; color: #1d1430; }
+.cardBtnMatched { background: #bfe3b0; color: #1d1430; }
+.cardBtn:focus-visible, .btn:focus-visible, .mapBtn:focus-visible {
+  outline: 3px solid #ff8c42;
+  outline-offset: 2px;
+}
+
+.cardLabel { display: block; font-size: 0.7rem; font-weight: 700; }
+
+.confetti {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.confetti span { display: inline-block; animation: bounceStar 0.9s ease-in-out infinite alternate; }
+.confetti span:nth-child(2n) { animation-delay: 0.15s; }
+.confetti span:nth-child(3n) { animation-delay: 0.3s; }
+
+@keyframes bounceStar {
+  from { transform: translateY(0) rotate(-6deg); }
+  to { transform: translateY(-10px) rotate(6deg); }
+}
+
+/* Mystery + quiz + board shared bits */
+.clueList, .boardTiles {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.clueBtn, .optionBtn {
+  min-height: 48px;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  text-align: left;
+  background: #fffdf6;
+  border: 3px solid #1d1430;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font: inherit;
+  color: #1d1430;
+}
+
+.optionBtnSelected { background: #ffe9a8; }
+
+.boardTiles { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+.tile {
+  border: 3px solid #1d1430;
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  background: #f3ead6;
+}
+
+.tileActive { background: #ffe9a8; outline: 3px solid #ff8c42; }
+
+.tile p { margin: 0.25rem 0; }
+
+.scoreRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+
+.scoreBox {
+  border: 3px solid #1d1430;
+  border-radius: 0.25rem;
+  padding: 0.5rem 0.9rem;
+  background: #f3ead6;
+}
+
+.unlockRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.unlockChip {
+  border: 2px solid #1d1430;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  background: #ffe9a8;
+  font-weight: 700;
+}
+
+.starCard {
+  border: 3px dashed #7d5fc4;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  background: #f1eaff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti span { animation: none; }
+}

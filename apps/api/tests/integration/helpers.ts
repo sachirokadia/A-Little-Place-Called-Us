@@ -78,6 +78,7 @@ export async function cleanDb(): Promise<void> {
   await prisma.futurePlan.deleteMany();
   await prisma.reminder.deleteMany();
   await prisma.voiceNote.deleteMany();
+  await prisma.gameProgress.deleteMany();
   await prisma.invitation.deleteMany();
   await prisma.spaceMember.deleteMany();
   await prisma.space.deleteMany();

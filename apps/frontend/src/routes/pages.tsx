@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, getSpace, listItems, setCsrf, type AnyItem, type Me, type Space } from '../lib/api.js';
 import { Card, EmptyState, ErrorBox, ErrorState, FormField, LoadingState, Page, fmtDate } from '../components/ui.js';
+import { ArcadeContent } from './arcade.js';
 import styles from './home.module.css';
 
 export function useList(spaceId: string | null, plural: string, query = '') {
@@ -624,12 +625,34 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
     { to: '/quiet', label: 'Quiet Room', note: 'A safe little corner' },
     { to: '/appreciations', label: 'Things I See in You', note: 'A gallery of little things' },
     { to: '/future', label: 'Our Future', note: 'An adventure map' },
-    { to: '/arcade', label: 'Secret Arcade', note: 'Playful universe — games arrive in Phase 1B' },
+    { to: '/arcade', label: 'Secret Arcade', note: 'A playful pixel arcade — Memory Match, a mini-mystery, a sample quiz and a trading board' },
   ];
   // Real garden data: one flower per saved shared memory, capped for
   // display, with the true count always stated in words. When the
   // space has no memories, no flowers are faked.
   const { items: memories } = useList(space ? space.id : null, 'memories');
+  // Arcade unlocks decorate Home only: they are read from the server
+  // when a space exists, and nothing extra renders when there are none.
+  const [homeUnlocks, setHomeUnlocks] = useState<string[]>([]);
+  useEffect(() => {
+    if (!space) { setHomeUnlocks([]); return; }
+    let cancelled = false;
+    api<{ progress?: { unlocks?: unknown }; unlocks?: unknown }>(`/spaces/${space.id}/game-progress/arcade-unlocks`)
+      .then((res) => {
+        if (cancelled) return;
+        const raw = res?.progress?.unlocks ?? res?.unlocks;
+        setHomeUnlocks(Array.isArray(raw) ? raw.filter((u): u is string => typeof u === 'string') : []);
+      })
+      .catch(() => { if (!cancelled) setHomeUnlocks([]); });
+    return () => { cancelled = true; };
+  }, [space]);
+  const UNLOCK_LABELS: Record<string, string> = {
+    'golden-star': '★ Golden star',
+    'lantern': 'Lantern',
+    'banner': 'Bunting banner',
+    'pixel-cat': 'Pixel cat',
+    'pixel-fox': 'Pixel fox',
+  };
   const memoryCount = space ? memories.length : 0;
   const visibleFlowers = Math.min(memoryCount, MAX_PATH_FLOWERS);
   const flowerText = !space
@@ -680,11 +703,20 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
             <p className={styles.flowerCount}>{flowerText}</p>
           </div>
         </div>
+        {homeUnlocks.length > 0 && (
+          <div aria-label="Decorations unlocked in the Secret Arcade, beside the cottage" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.5rem', margin: '0.75rem auto 0', maxWidth: 560 }}>
+            {homeUnlocks.filter((u) => UNLOCK_LABELS[u]).map((u) => (
+              <span key={u} style={{ background: '#fffdf6', border: '1px solid #d9cbb2', borderRadius: 999, padding: '0.4rem 0.8rem', fontSize: '0.92rem' }}>{UNLOCK_LABELS[u]} — unlocked in the Secret Arcade</span>
+            ))}
+          </div>
+        )}
         <div className={styles.hotspots}>
           <button className={styles.mailbox} type="button" onClick={() => navigate('/letters')} aria-label="Mailbox — open Letters">✉ Mailbox — Letters</button>
           <button className={styles.comeIn} type="button" onClick={() => setDoorOpen(true)} aria-label="Come on in — open the room-selection panel">Come on in.</button>
           <button className={styles.garden} type="button" onClick={() => navigate('/memories')} aria-label="Garden — open Memory Wall">❦ Garden — Memory Wall</button>
+          <button className={styles.mailbox} type="button" onClick={() => { try { localStorage.setItem('lp-hidden-step', 'home'); } catch { /* ignore */ } navigate('/arcade'); }} aria-label="Brass star — follow it to the Secret Arcade">★ Brass star — follow it to the Secret Arcade</button>
         </div>
+        <p className={styles.sceneHint}>A brass star is painted beside the cottage door. Its matching star is waiting in the Secret Arcade — follow it there.</p>
         {doorOpen && (
           <div id="cottage-destinations" className="cottage-destinations">
             <h2 style={{ marginTop: 0 }}>Inside the cottage</h2>
@@ -757,15 +789,11 @@ export function NotFoundPage() {
   );
 }
 
-export function ArcadePage() {
-  return (
-    <Page title="Secret Arcade" subtitle="Our playful universe." backHome>
-      <div className="arcade-note">
-        <p style={{ marginTop: 0 }}>Games arrive in Phase 1B. This page is intentionally not a set of game buttons — there are no games to play here yet, and nothing here pretends otherwise.</p>
-        <p style={{ marginBottom: 0 }}>When Phase 1B lands, it will bring a personalised detective mystery, a relationship board game, memory-match, and “how well do you know us?” quizzes — with game scores that never gate letters, memories, or support.</p>
-      </div>
-    </Page>
-  );
+export function ArcadePage({ space }: { me: Me; space: Space }) {
+  // Phase 4: the real arcade page lives in arcade.tsx. Game progress
+  // never gates any other room — Home, Memory Wall, Letters, Quiet
+  // Room, Appreciations and Future all work with zero game progress.
+  return <ArcadeContent space={space} />;
 }
 
 export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onSignedIn: () => void }) {

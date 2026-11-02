@@ -78,7 +78,7 @@ export default function App() {
         <Route path="/appreciations" element={signedIn && space ? <AppreciationsPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/appreciations/favourites" element={signedIn && space ? <FavouritesPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/future" element={signedIn && space ? <FuturePage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
-        <Route path="/arcade" element={signedIn ? <ArcadePage /> : signedOut} />
+        <Route path="/arcade" element={signedIn && space ? <ArcadePage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/deleted" element={signedIn && space ? <DeletedPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/settings" element={signedIn ? <SettingsPage me={me} space={space} onSignedOut={() => { setMe(null); setSpace(null); setCsrf(null); }} /> : signedOut} />
         <Route path="*" element={<NotFoundPage />} />

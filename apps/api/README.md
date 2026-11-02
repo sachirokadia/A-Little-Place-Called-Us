@@ -104,3 +104,19 @@ generate` / `prisma migrate deploy` work without this.
   T13 (games/board) is Phase 1B and is not implemented.
   Browser end-to-end tests (spec §8.1) are NOT done in 1A —
   that is a Phase 1C item, and no browser claim is made here.
+
+## GameProgress (Phase 4, Secret Arcade)
+
+Per-player only — no scores, leaderboards, or rankings endpoint.
+`GET /spaces/:spaceId/game-progress/:gameKey` returns
+`{ data: { gameKey, progress } }` for the caller's own row, or a
+generic 404 (a partner's row, a missing row, and a non-member all
+look identical). `PUT` on the same path upserts the caller's row
+only; a body-supplied `playerId` is rejected, never used to scope
+the row. Allowed `gameKey` values: `memory-match`, `mystery`,
+`quiz`, `arcade-unlocks` — anything else is a 400. Progress is
+validated server-side (strict shapes, unknown keys rejected);
+invalid shapes are 400 `VALIDATION_ERROR`. No letters, memories,
+or journal text is stored in progress. Game-progress writes are
+not audit-logged: no `gameProgress.*` audit event type exists in
+the codebase, and none was invented for this route.
