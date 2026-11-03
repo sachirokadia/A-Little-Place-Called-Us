@@ -1,5 +1,4 @@
 {
-  "$comment": "Live deployment (new stack, separate project). The API runs as a Vercel Serverless Function from api/v1/[...all].ts in this same project, so /api is same-origin by construction (session cookie is SameSite=lax). Filesystem routing serves /api/v1/* from that function before these SPA rewrites, so no /api proxy rewrite is needed or added. Build: scripts/vercel-build.sh (shared + Prisma generate + API build + prisma migrate deploy with POSTGRES_URL_NON_POOLING + frontend build). Uploads use the dev-only local backend under /tmp in serverless and are NON-DURABLE until a production storage provider is decided \u2014 see DEPLOYMENT.md.",
   "buildCommand": "bash scripts/vercel-build.sh",
   "outputDirectory": "apps/frontend/dist",
   "rewrites": [
