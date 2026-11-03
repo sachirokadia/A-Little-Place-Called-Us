@@ -3,6 +3,10 @@
   "outputDirectory": "apps/frontend/dist",
   "rewrites": [
     {
+      "source": "/api/v1/:path*",
+      "destination": "/api/index?__path=:path*"
+    },
+    {
       "destination": "/index.html",
       "source": "/login"
     },

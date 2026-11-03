@@ -65,12 +65,23 @@ break authentication in the browser, so the viable production model is a
 host, and the browser sees one origin.
 
 - The API runs as a Vercel Serverless Function in the SAME project as
-  the frontend: `api/v1/[...all].ts` wraps the existing Express app
+  the frontend: `api/index.ts` wraps the existing Express app
   (`apps/api/dist/app.js`, built by `scripts/vercel-build.sh`) without
   replacing the long-running server used in local development
-  (`node dist/index.js`). Filesystem routing serves `/api/v1/*` from
-  that function before the SPA fallbacks, so `/api` is same-origin by
-  construction and NO `/api` proxy rewrite is needed or added.
+  (`node dist/index.js`). Routing is by ONE explicit rewrite, FIRST in
+  `vercel.json` (before the SPA fallbacks):
+  `/api/v1/:path*` → `/api/index?__path=:path*`. Vercel's `:path*`
+  captures zero or more segments, so every `/api/v1/*` path reaches
+  this one function, and the handler rebuilds the original `/api/v1`
+  path from `__path` before handing the request to Express. This
+  replaced `api/v1/[...all].ts`: that file's filesystem catch-all
+  route only matched single-segment paths live (`/api/v1/health`
+  worked, but `/api/v1/health/ready` and `/api/v1/auth/me` returned
+  Vercel's platform 404 without ever reaching the app, so sign-in
+  could never work. Do not reintroduce a filesystem catch-all as the
+  API entrypoint without re-proving two-segment paths live. `/api`
+  is same-origin by construction and NO cross-origin proxy rewrite
+  is needed or added.
 - The function maps the Vercel Postgres pooled URL onto `DATABASE_URL`
   (`POSTGRES_PRISMA_URL`, else `POSTGRES_URL`) before importing the app,
   and writes dev-only local storage under `/tmp` (non-durable — see

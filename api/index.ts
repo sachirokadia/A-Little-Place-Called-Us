@@ -9,6 +9,20 @@
 // Vercel buildCommand) rather than the TypeScript source, so no second
 // copy of the routes exists.
 //
+// WHY THIS FILE REPLACES api/v1/[...all].ts (routing fix, 2026-11-03):
+// The catch-all file's filesystem route only matched SINGLE-segment paths
+// live: /api/v1/health and /api/v1/spaces reached the app, but every
+// two-segment path (/api/v1/health/ready, /api/v1/auth/me, and therefore
+// every real auth/content route) returned Vercel's platform 404 without
+// ever reaching the app, so sign-in could never work. Instead of relying
+// on filesystem catch-all routing, vercel.json now carries ONE explicit
+// rewrite, evaluated before the SPA fallbacks:
+//   { "source": "/api/v1/:path*", "destination": "/api/index?__path=:path*" }
+// Vercel's :path* captures zero or more segments, so every /api/v1/*
+// path — one segment, two segments, or deeper — is routed to this one
+// function, and the handler below rebuilds the original /api/v1 path
+// from __path before handing the request to Express.
+//
 // Environment mapping (done BEFORE importing the app, because config and
 // the Prisma client are evaluated at import time):
 // - Vercel Postgres stores expose POSTGRES_PRISMA_URL (pooled, PgBouncer
@@ -22,12 +36,6 @@
 //   Uploads on this deployment are therefore NON-DURABLE (they vanish
 //   with the function instance) until a production storage provider is
 //   decided — see DEPLOYMENT.md. Nothing here presents them as durable.
-//
-// URL reconstruction: Vercel dynamic routes populate req.query.all from
-// the path segments, while req.url may already be the original path or
-// the function path depending on routing. If req.url does not already
-// start with /api/v1, rebuild it from the segments so the Express app
-// (mounted at /api/v1) sees the path it expects.
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
@@ -38,20 +46,45 @@ if (!process.env.STORAGE_DIR) {
 }
 
 // eslint-disable-next-line import/first
-import { createApp } from '../../apps/api/dist/app.js';
+import { createApp } from '../apps/api/dist/app.js';
 // eslint-disable-next-line import/first
-import { requireConfig } from '../../apps/api/dist/config.js';
+import { requireConfig } from '../apps/api/dist/config.js';
 
 requireConfig();
 
 const app = createApp();
 
+function decodePath(raw: string): string | null {
+  if (!raw || raw.startsWith(':')) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export default function handler(req: any, res: any): void {
   const url: string = typeof req.url === 'string' ? req.url : '';
   if (!url.startsWith('/api/v1')) {
-    const all = req.query?.all;
-    if (all !== undefined) {
-      const segments = Array.isArray(all) ? all : [all];
+    const query = req.query ?? {};
+    // Case 1: the explicit rewrite /api/v1/:path* -> /api/index?__path=:path*.
+    // Vercel may deliver __path already decoded in req.query, or still
+    // encoded in req.url's query string; handle both, and keep every
+    // other original query parameter intact.
+    const rawPath = Array.isArray(query.__path)
+      ? query.__path.join('/')
+      : query.__path;
+    const decoded =
+      typeof rawPath === 'string' ? decodePath(rawPath) : null;
+    if (decoded !== null && decoded !== '') {
+      const qs = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+      const params = new URLSearchParams(qs);
+      params.delete('__path');
+      const rest = params.toString();
+      req.url = `/api/v1/${decoded}${rest ? `?${rest}` : ''}`;
+    } else if (query.all !== undefined) {
+      // Case 2: legacy catch-all query shape, kept as a fallback.
+      const segments = Array.isArray(query.all) ? query.all : [query.all];
       const queryString = url.includes('?') ? url.slice(url.indexOf('?')) : '';
       req.url = `/api/v1/${segments.map(String).join('/')}${queryString}`;
     }
