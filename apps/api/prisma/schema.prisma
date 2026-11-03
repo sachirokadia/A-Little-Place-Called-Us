@@ -91,6 +91,8 @@ model User {
   chestRiddles ChestRiddle[]
   chestSolves ChestSolve[]
   chestRewardsUpdated ChestReward[]
+  boardConfigs BoardConfig[]
+  boardGamesCreated BoardGame[]
 
   @@index([emailLower])
 }
@@ -145,6 +147,8 @@ model Space {
   chestRiddles ChestRiddle[]
   chestSolves ChestSolve[]
   chestReward ChestReward?
+  boardConfigs BoardConfig[]
+  boardGames BoardGame[]
 }
 
 model SpaceMember {
@@ -547,4 +551,65 @@ model ChestReward {
   updatedBy  User     @relation(fields: [updatedById], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// Phase 7: original relationship board game (custom terminology
+// only: Memory Coins, Plot Twists, Little Surprises, Places and
+// Moments, tokens — no third-party board-game name, logo, or card
+// text appears anywhere here).
+//
+// BoardConfig is shared configuration for a space: ANY space
+// member may read it, either member may create one, and only the
+// AUTHOR may PATCH or DELETE their own row (a partner gets a
+// generic 404, following the hero-router pattern). The default
+// config is seeded per space on first GET if none exists (see
+// routes/board.ts); it is an ordinary row, not special-cased
+// afterwards. The `config` column holds the full BoardConfigData
+// JSON; its shape is owned by the shared board engine and is
+// validated by the route layer (zod shape checks plus a trial
+// createGame call) at CREATE/PATCH time, so GET trusts stored JSON.
+//
+// BoardGame is one running game. `configId` is a PLAIN id, NOT a
+// foreign key: deleting a config must never delete a running
+// game. `configSnapshot` is the full BoardConfigData copied at
+// creation, so mid-game config edits cannot affect a running
+// game. `state` is the full GameState JSON, owned by the engine;
+// the route never trusts client-supplied state. `version` is
+// optimistic locking: it starts at 1 and increments on every
+// accepted action; an action whose expectedVersion does not match
+// is rejected with 409 STALE_VERSION. `status` is 'playing' or
+// 'finished'. Games are local two-player on one device: both
+// space members share the device and the game, so either member
+// may read a game and post actions to it; the "actor" is the
+// in-game player index 0/1, NOT the account.
+model BoardConfig {
+  id        String   @id @default(uuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  name      String
+  config    Json
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([spaceId, createdAt])
+}
+
+model BoardGame {
+  id             String   @id @default(uuid())
+  spaceId        String
+  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  configId       String
+  configSnapshot Json
+  state          Json
+  version        Int      @default(1)
+  status         String   @default("playing")
+  createdById    String
+  createdBy      User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([spaceId, createdAt])
 }

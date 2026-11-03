@@ -50,4 +50,10 @@ export const BOYFRIEND_GAMES: BoyfriendGameEntry[] = [
     description: 'An original rooftop adventure: three little city levels, five memory tokens each, and a finish flag at the end of every street.',
     anchor: 'game-hero-adventure',
   },
+  {
+    id: 'our-little-world',
+    title: 'Our Little World',
+    description: 'A local two-player board game with Memory Coins, played together on this device.',
+    anchor: 'game-our-little-world',
+  },
 ];

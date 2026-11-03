@@ -9,6 +9,7 @@ import { CatchHearts } from './boyfriend/CatchHearts.js';
 import { GuessGame } from './boyfriend/GuessGame.js';
 import { ChestGame } from './boyfriend/ChestGame.js';
 import { HeroAdventure } from './hero/HeroAdventure.js';
+import { BoardGame } from './board/BoardGame.js';
 import { BOYFRIEND_GAMES } from './boyfriend/registry.js';
 import {
   BOARD_PASS_START_BONUS, BOARD_PLACES, BOARD_START_COINS, MATCH_DECK, MYSTERY_CLUES,
@@ -830,6 +831,11 @@ export function ArcadeContent({ space, me }: { space: Space; me: Me }) {
         <section className={styles.section} id="game-hero-adventure" tabIndex={-1} aria-labelledby="hero-adventure-heading">
           <h2 id="hero-adventure-heading">The Rooftop Adventure</h2>
           <HeroAdventure space={space} me={me} />
+        </section>
+
+        <section className={styles.section} id="game-our-little-world" tabIndex={-1} aria-labelledby="our-little-world-heading">
+          <h2 id="our-little-world-heading">Our Little World</h2>
+          <BoardGame space={space} me={me} />
         </section>
 
         <section className={styles.section} aria-label="Your arcade unlocks">

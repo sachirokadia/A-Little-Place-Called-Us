@@ -5,6 +5,7 @@ import { ApiError, correlationId, errorBody } from './errors.js';
 import { checkRateLimit, RATE_LIMITS, userKey } from './lib/rateLimit.js';
 import { csrfGuard, originGuard, resolveSession } from './middleware/auth.js';
 import { authRouter } from './routes/auth.js';
+import { boardRouter } from './routes/board.js';
 import { boyfriendRouter } from './routes/boyfriend.js';
 import { contentRouter } from './routes/content.js';
 import { exportRouter } from './routes/export.js';
@@ -75,6 +76,7 @@ export function createApp() {
   app.use('/api/v1', exportRouter);
   app.use('/api/v1', gamesRouter);
   app.use('/api/v1', boyfriendRouter);
+  app.use('/api/v1', boardRouter);
   app.use('/api/v1', heroRouter);
   app.use('/api/v1', mediaRouter);
 
