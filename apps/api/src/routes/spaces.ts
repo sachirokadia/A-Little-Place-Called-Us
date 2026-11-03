@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { invitationJoinSchema, spaceCreateSchema } from '@little-place/shared';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
@@ -55,6 +56,28 @@ spacesRouter.get('/:spaceId', async (req, res, next) => {
       where: { id: spaceId }, include: { members: { include: { user: true } } },
     });
     if (!space) throw notFound();
+    return res.json({ data: { id: space.id, name: space.name, members: space.members.map(publicMember) } });
+  } catch (e) {
+    return next(e);
+  }
+});
+
+// Rename: either space member may rename the shared space (shared
+// config, like the chest reward — not owner-only). A non-member
+// gets the same generic 404 as for a missing space.
+const spaceRenameSchema = z.object({ name: z.string().trim().min(1).max(100) }).strict();
+
+spacesRouter.patch('/:spaceId', validateBody(spaceRenameSchema), async (req, res, next) => {
+  try {
+    if (!req.user) throw unauthorized();
+    const spaceId = req.params.spaceId ?? '';
+    await requireSpaceMember(req.user.id, spaceId);
+    const { name } = req.body as { name: string };
+    const space = await prisma.space.update({
+      where: { id: spaceId },
+      data: { name },
+      include: { members: { include: { user: true } } },
+    });
     return res.json({ data: { id: space.id, name: space.name, members: space.members.map(publicMember) } });
   } catch (e) {
     return next(e);

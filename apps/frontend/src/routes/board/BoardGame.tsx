@@ -27,6 +27,7 @@
 //   POST   /spaces/:spaceId/board/games/:gameId/restart
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, listItems, type AnyItem, type Me, type Space } from '../../lib/api.js';
 import styles from './board.module.css';
 
@@ -747,6 +748,37 @@ export function BoardGame({ space, me }: { space: Space; me: Me }) {
             ? 'Game over.'
             : <>It is {current?.name ?? `Player ${turn + 1}`}&apos;s turn · Phase: {phase || '—'} · Dice: {diceText}</>}
         </p>
+        {/* Linked-memory detail for the landed space (and, below it,
+            for owned places with a link). The link only points at
+            the Memory Wall — the memory itself is never gated
+            behind this game and stays reachable from its own room. */}
+        {(() => {
+          const landed = current ? spaces[current.position] : undefined;
+          if (!landed || !landed.memoryId) return null;
+          const memory = memories.find((m) => m.id === landed.memoryId);
+          return (
+            <p role="status">
+              On {landed.name} — linked memory:{' '}
+              <Link to="/memories">
+                {memory && typeof memory.title === 'string' ? `“${memory.title}” — ` : ''}See it on the Memory Wall →
+              </Link>
+            </p>
+          );
+        })()}
+        {ownedSpaces(turn).filter((s) => s.memoryId).length > 0 && (
+          <p>
+            <small>
+              {current?.name ?? `Player ${turn + 1}`}&apos;s places with a linked memory:{' '}
+              {ownedSpaces(turn).filter((s) => s.memoryId).map((s, i) => (
+                <span key={s.id}>
+                  {i > 0 ? ', ' : ''}
+                  <Link to="/memories">{s.name}</Link>
+                </span>
+              ))}
+              {' '}— each opens on the Memory Wall, not inside this game.
+            </small>
+          </p>
+        )}
         {lastEventMessage && <p role="status">Last event: {lastEventMessage}</p>}
 
         {eventCard && (
@@ -1098,7 +1130,7 @@ export function BoardGame({ space, me }: { space: Space; me: Me }) {
           {configs.length === 0 && <option value="">No setups available</option>}
           {configs.map((cfg) => (
             <option key={cfg.id} value={cfg.id}>
-              {cfg.name}{cfg.isDefault ? ' (default)' : ''}{cfg.authorId === me.id ? ' (yours)' : ''}
+              {cfg.name}{cfg.isDefault ? ' (default sample)' : ''}{cfg.authorId === me.id ? ' (yours)' : ''}
             </option>
           ))}
         </select>

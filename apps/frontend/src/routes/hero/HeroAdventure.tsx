@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getPreferences, listItems, type AnyItem, type Me, type Space } from '../../lib/api.js';
 import { Card, ErrorBox } from '../../components/ui.js';
+import { getFinalMessage, joinParagraphs, saveFinalMessage, splitParagraphs, type FinalMessage } from '../../lib/final-messages.js';
 import styles from './hero.module.css';
 import {
   EMPTY_HERO_PROGRESS,
@@ -171,6 +172,73 @@ export function HeroAdventure({ space, me }: { space: Space; me: Me }) {
   const [localOnly, setLocalOnly] = useState(false);
   const [paused, setPaused] = useState(false);
   const [finalOpen, setFinalOpen] = useState(false);
+  // DB-backed hero final message (personalisation): either partner
+  // may read and overwrite it, never gated on completion. Until a
+  // row is saved, the generic sample below is shown, still labelled
+  // as a sample; a saved row is never presented as the sample.
+  const [savedFinal, setSavedFinal] = useState<FinalMessage | null>(null);
+  const [editingFinal, setEditingFinal] = useState(false);
+  const [finalDraft, setFinalDraft] = useState('');
+  const [finalSaveError, setFinalSaveError] = useState<string | null>(null);
+  const [savingFinal, setSavingFinal] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getFinalMessage(space.id, 'hero-final')
+      .then((row) => { if (!cancelled) setSavedFinal(row); })
+      .catch(() => { /* No saved message yet: the sample below is shown. */ });
+    return () => { cancelled = true; };
+  }, [space.id]);
+  const shownFinalParagraphs = (() => {
+    const saved = savedFinal ? splitParagraphs(savedFinal.text) : [];
+    return saved.length > 0 ? saved : GENERIC_FINAL_MESSAGE;
+  })();
+  const finalMessageLabel = savedFinal
+    ? 'Edited by a partner — this replaces the original sample'
+    : 'Generic sample final message — a draft the author can personalise later.';
+  const startFinalEdit = () => {
+    setFinalDraft(savedFinal ? savedFinal.text : joinParagraphs(GENERIC_FINAL_MESSAGE));
+    setFinalSaveError(null);
+    setEditingFinal(true);
+  };
+  const saveFinal = async () => {
+    if (!finalDraft.trim() || savingFinal) return;
+    setSavingFinal(true);
+    setFinalSaveError(null);
+    try {
+      const saved = await saveFinalMessage(space.id, 'hero-final', finalDraft);
+      setSavedFinal(saved);
+      setEditingFinal(false);
+    } catch (err) {
+      setFinalSaveError(err instanceof Error ? err.message : 'Could not save this message.');
+    } finally {
+      setSavingFinal(false);
+    }
+  };
+  const renderFinalEdit = () => editingFinal ? (
+    <div>
+      <p><small>Write your own version below — separate paragraphs with a blank line. Saving replaces the sample for both partners.</small></p>
+      <textarea
+        value={finalDraft}
+        onChange={(e) => setFinalDraft(e.target.value)}
+        rows={10}
+        style={{ width: '100%', boxSizing: 'border-box' }}
+        aria-label="Final message"
+      />
+      <ErrorBox message={finalSaveError} />
+      <p style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+        <button className={styles.btn} type="button" onClick={() => void saveFinal()} disabled={savingFinal || !finalDraft.trim()}>
+          {savingFinal ? 'Saving…' : 'Save this message'}
+        </button>
+        <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={() => setEditingFinal(false)}>Cancel</button>
+      </p>
+    </div>
+  ) : (
+    <p>
+      <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={startFinalEdit}>
+        Edit this message
+      </button>
+    </p>
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [levelDone, setLevelDone] = useState<{ levelId: LevelId; adventureDone: boolean } | null>(null);
   const [hud, setHud] = useState<{ tokens: number; checkpoint: boolean; sign: string | null; message: string }>({
@@ -966,12 +1034,13 @@ export function HeroAdventure({ space, me }: { space: Space; me: Me }) {
   );
 
   const finalMessagePanel = finalOpen && (
-    <div className={styles.finalMessage} role="region" aria-label="Generic sample final message">
-      <p><strong>Generic sample final message — a draft the author can personalise later.</strong></p>
+    <div className={styles.finalMessage} role="region" aria-label={savedFinal ? 'Final message, edited by a partner' : 'Generic sample final message'}>
+      <p><strong>{finalMessageLabel}</strong></p>
       <p>Yours to read any time — no completion needed.</p>
-      {GENERIC_FINAL_MESSAGE.map((paragraph, i) => (
+      {shownFinalParagraphs.map((paragraph, i) => (
         <p key={i}>{paragraph}</p>
       ))}
+      {renderFinalEdit()}
       <p>
         <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={() => setFinalOpen(false)}>
           Close the final message
@@ -1329,11 +1398,12 @@ export function HeroAdventure({ space, me }: { space: Space; me: Me }) {
           {levelDone.adventureDone && (
             <div>
               <p>The adventure is complete — here is the final message, also readable any time from the map screen.</p>
-              <div className={styles.finalMessage} role="region" aria-label="Generic sample final message">
-                <p><strong>Generic sample final message — a draft the author can personalise later.</strong></p>
-                {GENERIC_FINAL_MESSAGE.map((paragraph, i) => (
+              <div className={styles.finalMessage} role="region" aria-label={savedFinal ? 'Final message, edited by a partner' : 'Generic sample final message'}>
+                <p><strong>{finalMessageLabel}</strong></p>
+                {shownFinalParagraphs.map((paragraph, i) => (
                   <p key={i}>{paragraph}</p>
                 ))}
+                {renderFinalEdit()}
               </div>
             </div>
           )}

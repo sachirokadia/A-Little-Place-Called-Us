@@ -89,6 +89,7 @@ model User {
   chestRiddles ChestRiddle[]
   chestSolves ChestSolve[]
   chestRewardsUpdated ChestReward[]
+  finalMessagesUpdated FinalMessage[]
   boardConfigs BoardConfig[]
   boardGamesCreated BoardGame[]
 
@@ -142,6 +143,7 @@ model Space {
   quizQuestions QuizQuestion[]
   heroMissions HeroMission[]
   guessRounds GuessRound[]
+  finalMessages FinalMessage[]
   chestRiddles ChestRiddle[]
   chestSolves ChestSolve[]
   chestReward ChestReward?
@@ -550,6 +552,28 @@ model ChestReward {
   updatedBy  User     @relation(fields: [updatedById], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// Personalisation: the two shared final messages (the arcade's
+// final star letter and the hero adventure's final message). These
+// are SHARED config, like the chest reward: either space member may
+// read and overwrite them; there is no author-only restriction.
+// `kind` is 'star-letter' | 'hero-final' (enforced by a CHECK in
+// the migration). When no row exists, the frontend falls back to
+// the code drafts, still labelled as drafts.
+model FinalMessage {
+  id          String   @id @default(uuid())
+  spaceId     String
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  kind        String
+  text        String
+  updatedById String
+  updatedBy   User     @relation(fields: [updatedById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([spaceId, kind])
+  @@index([spaceId])
 }
 
 // Phase 7: original relationship board game (custom terminology

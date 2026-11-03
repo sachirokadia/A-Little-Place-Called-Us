@@ -15,6 +15,7 @@ import { healthRouter } from './routes/health.js';
 import { mediaRouter } from './routes/media.js';
 import { preferencesRouter } from './routes/preferences.js';
 import { spacesRouter } from './routes/spaces.js';
+import { finalMessagesRouter } from './routes/final-messages.js';
 
 export function createApp() {
   const app = express();
@@ -76,6 +77,7 @@ export function createApp() {
   app.use('/api/v1', exportRouter);
   app.use('/api/v1', gamesRouter);
   app.use('/api/v1', boyfriendRouter);
+  app.use('/api/v1', finalMessagesRouter);
   app.use('/api/v1', boardRouter);
   app.use('/api/v1', heroRouter);
   app.use('/api/v1', mediaRouter);

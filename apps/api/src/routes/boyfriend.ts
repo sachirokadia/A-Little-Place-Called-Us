@@ -80,6 +80,11 @@ const guessRoundCreateSchema = z
   .object({ question: questionField, answer: answerField })
   .strict();
 
+const guessRoundPatchSchema = z
+  .object({ question: questionField.optional(), answer: answerField.optional() })
+  .strict()
+  .refine((v) => Object.keys(v).length >= 1, { message: 'At least one field is required' });
+
 const guessSchema = z.object({ guess: answerField }).strict();
 
 const chestRiddleCreateSchema = z
@@ -382,6 +387,56 @@ boyfriendRouter.get('/spaces/:spaceId/guess-rounds', async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
     });
     return res.json({ data: rows.map((r) => guessPublic(r, callerId)) });
+  } catch (e) {
+    return next(e);
+  }
+});
+
+async function scopedGuess(spaceId: string, id: string) {
+  const row = await prisma.guessRound.findFirst({ where: { id, spaceId } });
+  if (!row) throw notFound();
+  return row;
+}
+
+// Author-only edit/delete, mirroring the quiz/riddle routes: the
+// creator may PATCH (open rounds only — editing a revealed round
+// would leave its stored guess/correct verdict inconsistent) or
+// DELETE their own round; a partner gets a generic 404.
+boyfriendRouter.patch(
+  '/spaces/:spaceId/guess-rounds/:id',
+  validateBody(guessRoundPatchSchema),
+  async (req, res, next) => {
+    try {
+      const callerId = requireUser(req);
+      const spaceId = req.params.spaceId ?? '';
+      await requireSpaceMember(callerId, spaceId);
+      const row = await scopedGuess(spaceId, req.params.id ?? '');
+      assertAuthor(row.creatorId, callerId);
+      if (row.revealed) throw badRequest('Invalid request');
+      const body = req.body as z.infer<typeof guessRoundPatchSchema>;
+      const updated = await prisma.guessRound.update({
+        where: { id: row.id },
+        data: {
+          ...(body.question !== undefined ? { question: body.question } : {}),
+          ...(body.answer !== undefined ? { answer: body.answer } : {}),
+        },
+      });
+      return res.json({ data: guessPublic(updated, callerId) });
+    } catch (e) {
+      return next(e);
+    }
+  },
+);
+
+boyfriendRouter.delete('/spaces/:spaceId/guess-rounds/:id', async (req, res, next) => {
+  try {
+    const callerId = requireUser(req);
+    const spaceId = req.params.spaceId ?? '';
+    await requireSpaceMember(callerId, spaceId);
+    const row = await scopedGuess(spaceId, req.params.id ?? '');
+    assertAuthor(row.creatorId, callerId);
+    await prisma.guessRound.delete({ where: { id: row.id } });
+    return res.json({ data: { deleted: true } });
   } catch (e) {
     return next(e);
   }

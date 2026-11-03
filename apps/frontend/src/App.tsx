@@ -125,7 +125,7 @@ export default function App() {
         <Route path="/reminders" element={signedIn && space ? <RemindersPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/arcade" element={signedIn && space ? <ArcadePage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/deleted" element={signedIn && space ? <DeletedPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
-        <Route path="/settings" element={signedIn ? <SettingsPage me={me} space={space} onSignedOut={() => { setMe(null); setSpace(null); setCsrf(null); setSessionUnknown(false); }} /> : signedOut} />
+        <Route path="/settings" element={signedIn ? <SettingsPage me={me} space={space} onSpaceChange={refresh} onSignedOut={() => { setMe(null); setSpace(null); setCsrf(null); setSessionUnknown(false); }} /> : signedOut} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <footer style={{ textAlign: 'center', padding: '1rem', color: '#6b5646' }}>

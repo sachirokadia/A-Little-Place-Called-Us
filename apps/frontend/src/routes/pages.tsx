@@ -55,6 +55,18 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
       if (typeof item.visibility === 'string') out.visibility = item.visibility as string;
       out.revealAt = typeof item.revealAt === 'string' ? (item.revealAt as string).slice(0, 16) : '';
     }
+    // Dates the update schemas already accept but the form omitted:
+    // happenedOn (memories) and targetDate (plans), mirroring the
+    // revealAt handling above. The server still strictly validates
+    // them as real YYYY-MM-DD calendar dates.
+    // Always present (blank when unset) so a date can be added to a
+    // dateless memory/plan as well as changed on a dated one.
+    if (singular === 'memory') {
+      out.happenedOn = typeof item.happenedOn === 'string' ? (item.happenedOn as string).slice(0, 10) : '';
+    }
+    if (singular === 'plan') {
+      out.targetDate = typeof item.targetDate === 'string' ? (item.targetDate as string).slice(0, 10) : '';
+    }
     return out;
   });
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +92,14 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
       if ('revealAt' in values) {
         body.revealAt = values.revealAt ? new Date(values.revealAt).toISOString() : null;
       }
+      // Clearing a date sends null (the server accepts nullable
+      // dates); an empty string would fail its strict date check.
+      if ('happenedOn' in values) {
+        body.happenedOn = values.happenedOn ? values.happenedOn : null;
+      }
+      if ('targetDate' in values) {
+        body.targetDate = values.targetDate ? values.targetDate : null;
+      }
       await api(`/${singular}/${item.id}`, { method: 'PATCH', body });
       onDone();
     } catch (err) {
@@ -93,7 +113,7 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
     <form onSubmit={submit}>
       <ErrorBox message={error} />
       {Object.entries(values).map(([key, value]) => (
-        <FormField key={key} label={key === 'tags' ? 'Tags (comma-separated)' : key === 'revealAt' ? 'Release date and time (for scheduled letters)' : key === 'visibility' ? 'Visibility' : key}>
+        <FormField key={key} label={key === 'tags' ? 'Tags (comma-separated)' : key === 'revealAt' ? 'Release date and time (for scheduled letters)' : key === 'visibility' ? 'Visibility' : key === 'happenedOn' ? 'Date it happened' : key === 'targetDate' ? 'Target date' : key}>
           {key === 'body' || key === 'story' || key === 'detail' || key === 'text' ? (
             <textarea className="field" rows={4} value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
           ) : key === 'visibility' ? (
@@ -110,6 +130,8 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
             </select>
           ) : key === 'revealAt' ? (
             <input className="field" type="datetime-local" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
+          ) : key === 'happenedOn' || key === 'targetDate' ? (
+            <input className="field" type="date" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
           ) : (
             <input type="text" className="field" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
           )}
@@ -362,27 +384,51 @@ export function ListPage({ me, space, plural, singular, title, subtitle, createF
   );
 }
 
-function MediaStrip({ linkedType, linkedId }: { linkedType: string; linkedId: string }) {
+function MediaStrip({ linkedType, linkedId, canDelete = false, onDeleted }: { linkedType: string; linkedId: string; canDelete?: boolean; onDeleted?: () => void }) {
   const [assets, setAssets] = useState<AnyItem[]>([]);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   useEffect(() => {
     api<AnyItem[]>(`/media/for/${linkedType}/${linkedId}`).then(setAssets).catch(() => setAssets([]));
   }, [linkedType, linkedId]);
   if (assets.length === 0) return null;
+  // Owner-only delete, mirroring the item soft-delete flow (a
+  // confirm step, then refresh). The button is only rendered for
+  // the owner; the server still enforces owner-only deletion, so a
+  // partner never deletes through this UI even if it were shown.
+  const deleteAsset = async (id: string) => {
+    if (!window.confirm('Delete this photo or recording? It will be removed from this item.')) return;
+    setDeleteError(null);
+    try {
+      await api(`/media/${id}`, { method: 'DELETE' });
+      setAssets((prev) => prev.filter((a) => a.id !== id));
+      onDeleted?.();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Could not delete');
+    }
+  };
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-      {assets.map((a) => (
-        (a.mimeType as string)?.startsWith('image/') ? (
-          // Display-size variant (?size=display): same auth/visibility
-          // checks as the full stream, aspect preserved, max 1200px
-          // on the longest side. width/height come from the stored
-          // asset dimensions so the browser reserves the right ratio
-          // and layout shift stays small. Proportions are never
-          // cropped: .polaroid-photo has no object-fit / fixed height.
-          <img key={a.id} src={`/api/v1/media/${a.id}?size=display`} alt="Memory photo" className="polaroid-photo" style={{ maxWidth: 220 }} loading="lazy" decoding="async" width={typeof a.width === 'number' ? a.width : undefined} height={typeof a.height === 'number' ? a.height : undefined} />
-        ) : (
-          <audio key={a.id} controls src={`/api/v1/media/${a.id}`} />
-        )
-      ))}
+    <div>
+      <ErrorBox message={deleteError} />
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        {assets.map((a) => (
+          <span key={a.id} style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+            {(a.mimeType as string)?.startsWith('image/') ? (
+              // Display-size variant (?size=display): same auth/visibility
+              // checks as the full stream, aspect preserved, max 1200px
+              // on the longest side. width/height come from the stored
+              // asset dimensions so the browser reserves the right ratio
+              // and layout shift stays small. Proportions are never
+              // cropped: .polaroid-photo has no object-fit / fixed height.
+              <img src={`/api/v1/media/${a.id}?size=display`} alt="Memory photo" className="polaroid-photo" style={{ maxWidth: 220 }} loading="lazy" decoding="async" width={typeof a.width === 'number' ? a.width : undefined} height={typeof a.height === 'number' ? a.height : undefined} />
+            ) : (
+              <audio controls src={`/api/v1/media/${a.id}`} />
+            )}
+            {canDelete && (
+              <button className="btn quiet" type="button" onClick={() => void deleteAsset(a.id)}>Delete this file</button>
+            )}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -471,7 +517,7 @@ export function MemoriesPage({ me, space }: { me: Me; space: Space }) {
       }}
       extraForItem={(item, refresh) => (
         <div>
-          <MediaStrip linkedType="memory" linkedId={item.id} />
+          <MediaStrip linkedType="memory" linkedId={item.id} canDelete={item.authorId === me.id} onDeleted={refresh} />
           {item.authorId === me.id ? <UploadForm linkedType="memory" linkedId={item.id} onDone={refresh} /> : null}
         </div>
       )}
@@ -572,13 +618,55 @@ export function QuietPage({ me, space }: { me: Me; space: Space }) {
       <section style={{ marginTop: '3rem' }}>
         <h2>Comforting notes</h2>
         <p>Saved comforting voice notes. Upload an audio file to a voice note you create below.</p>
-        <VoiceNotes space={space} />
+        <p>Voice notes here are private to their author, like journals — your partner cannot see them.</p>
+        <VoiceNotes space={space} me={me} />
       </section>
     </Page>
   );
 }
 
-function VoiceNotes({ space }: { space: Space }) {
+function VoiceNoteCard({ item, me, onRefresh }: { item: AnyItem; me: Me; onRefresh: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // Voice-note lists are author-only server-side, so these cards
+  // are always the caller's own — the check below mirrors ItemCard
+  // and keeps the buttons off any row that is not the author's.
+  const isAuthor = item.authorId === me.id;
+  if (editing) {
+    return (
+      <Card>
+        <ErrorBox message={error} />
+        <FormField label="Voice note title">
+          <input type="text" className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </FormField>
+        <p style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <button className="btn" type="button" disabled={saving || !title.trim()} onClick={async () => { if (saving) return; setSaving(true); setError(null); try { await api(`/voice-note/${item.id}`, { method: 'PATCH', body: { title: title.trim() } }); setEditing(false); onRefresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not save'); } finally { setSaving(false); } }}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button className="btn quiet" type="button" onClick={() => setEditing(false)}>Cancel</button>
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <ErrorBox message={error} />
+      <h3 style={{ marginTop: 0 }}>{item.title as string}</h3>
+      <MediaStrip linkedType="voiceNote" linkedId={item.id} canDelete={isAuthor} onDeleted={onRefresh} />
+      <UploadForm linkedType="voiceNote" linkedId={item.id} onDone={onRefresh} />
+      {isAuthor && (
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+          <button className="btn quiet" onClick={() => { setTitle((item.title as string) ?? ''); setError(null); setEditing(true); }}>Edit title</button>
+          <button className="btn quiet" onClick={async () => { if (!window.confirm('Move this voice note to Deleted? You can restore it from Deleted.')) return; setError(null); try { await api(`/voice-note/${item.id}/soft-delete`, { method: 'POST', body: {} }); onRefresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete'); } }}>Move to Deleted</button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function VoiceNotes({ space, me }: { space: Space; me: Me }) {
   const { items, error, loading, refresh } = useList(space.id, 'voice-notes');
   const [title, setTitle] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -595,11 +683,7 @@ function VoiceNotes({ space }: { space: Space }) {
         : items.length === 0 ? <EmptyState title="No voice notes yet" />
         : <div style={{ display: 'grid', gap: '1rem' }}>
           {items.map((item) => (
-            <Card key={item.id}>
-              <h3 style={{ marginTop: 0 }}>{item.title as string}</h3>
-              <MediaStrip linkedType="voiceNote" linkedId={item.id} />
-              <UploadForm linkedType="voiceNote" linkedId={item.id} onDone={refresh} />
-            </Card>
+            <VoiceNoteCard key={item.id} item={item} me={me} onRefresh={refresh} />
           ))}
         </div>}
     </div>
@@ -773,6 +857,7 @@ export function DeletedPage({ me, space }: { me: Me; space: Space }) {
     { plural: 'appreciations', singular: 'appreciation', label: 'Appreciations' },
     { plural: 'plans', singular: 'plan', label: 'Plans' },
     { plural: 'reminders', singular: 'reminder', label: 'Reminders' },
+    { plural: 'voice-notes', singular: 'voice-note', label: 'Voice notes' },
   ];
   return (
     <Page title="Deleted" subtitle="Your own soft-deleted items. Restore returns them; permanent delete is a second, explicit act and cannot be undone." backHome>
@@ -851,7 +936,7 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
     { to: '/quiet', label: 'Quiet Room', note: 'A safe little corner' },
     { to: '/appreciations', label: 'Things I See in You', note: 'A gallery of little things' },
     { to: '/future', label: 'Our Future', note: 'An adventure map' },
-    { to: '/arcade', label: 'Secret Arcade', note: 'A playful pixel arcade — Memory Match, a mini-mystery, a sample quiz and a trading board' },
+    { to: '/arcade', label: 'Secret Arcade', note: 'A playful pixel arcade — Memory Match, Detective Mini-Mystery, a sample Relationship Quiz, Property-Trading Board, Photo Memory Match, How Well Do You Know Us?, Catch the Hearts, Guess My Answer, Unlock the Chest, The Rooftop Adventure and Our Little World' },
   ];
   // Real garden data: one flower per saved shared memory, capped for
   // display, with the true count always stated in words. When the
@@ -1204,7 +1289,9 @@ export function WelcomePage({ me, space, onSpaceChange }: { me: Me; space: Space
 }
 
 function PreferencesSection() {
+  const navigate = useNavigate();
   const [prefs, setPrefs] = useState<Preferences | null>(null);
+  const [revisiting, setRevisiting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -1264,6 +1351,30 @@ function PreferencesSection() {
         <p><small>Preferences are saved to your account and follow you to another device.</small></p>
         <button className="btn" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save preferences'}</button>
       </form>
+      <p style={{ marginTop: '1rem' }}>
+        <button
+          className="btn quiet"
+          type="button"
+          disabled={revisiting}
+          onClick={async () => {
+            if (revisiting) return;
+            setRevisiting(true);
+            setSaveError(null);
+            try {
+              const updated = await savePreferences({ ...prefs, onboardingSeen: false });
+              setPrefs({ ...DEFAULT_PREFERENCES, ...updated });
+              navigate('/welcome');
+            } catch (err) {
+              setSaveError(err instanceof Error ? err.message : 'Could not save preferences');
+            } finally {
+              setRevisiting(false);
+            }
+          }}
+        >
+          {revisiting ? 'Opening…' : 'Revisit the welcome'}
+        </button>{' '}
+        <small>Shows the three-step welcome again. Returning visits still skip it by default afterwards.</small>
+      </p>
     </section>
   );
 }
@@ -1308,24 +1419,86 @@ function ExportSection({ space }: { space: Space }) {
   );
 }
 
-export function SettingsPage({ me, space, onSignedOut }: { me: Me; space: Space | null; onSignedOut: () => void }) {
+// Avatar presets: exactly the avatarKey values PATCH /auth/me
+// already accepts. The badge renders the chosen animal emoji, so a
+// picker choice is always visible — here and in the members list
+// below — never a value that changes nothing on screen.
+const AVATAR_OPTIONS = [
+  { key: 'bunny', label: 'Bunny', emoji: '🐰' },
+  { key: 'fox', label: 'Fox', emoji: '🦊' },
+  { key: 'owl', label: 'Owl', emoji: '🦉' },
+  { key: 'bear', label: 'Bear', emoji: '🐻' },
+  { key: 'cat', label: 'Cat', emoji: '🐱' },
+  { key: 'dog', label: 'Dog', emoji: '🐶' },
+] as const;
+
+function AvatarBadge({ avatarKey, displayName }: { avatarKey: string; displayName: string }) {
+  const option = AVATAR_OPTIONS.find((o) => o.key === avatarKey) ?? AVATAR_OPTIONS[0]!;
+  return (
+    <span
+      role="img"
+      aria-label={`${displayName}'s avatar: ${option.label}`}
+      title={`${displayName} — ${option.label}`}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '2rem', height: '2rem', borderRadius: '50%', border: '1px solid #d9cbb2', background: '#fffdf6', fontSize: '1.1rem', flexShrink: 0 }}
+    >
+      {option.emoji}
+    </span>
+  );
+}
+
+export function SettingsPage({ me, space, onSignedOut, onSpaceChange }: { me: Me; space: Space | null; onSignedOut: () => void; onSpaceChange?: () => Promise<void> }) {
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(me.displayName);
+  const [avatarKey, setAvatarKey] = useState(me.avatarKey);
+  const [spaceName, setSpaceName] = useState(space?.name ?? '');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [savingSpaceName, setSavingSpaceName] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const isOwner = space?.members.find((m) => m.id === me.id)?.role === 'owner';
   return (
     <Page title="Settings" subtitle="Your profile, your sessions, and your space's invitations." backHome>
       <ErrorBox message={error} />
       {notice && <p className="notice">{notice}</p>}
-      <form onSubmit={async (e) => { e.preventDefault(); if (savingProfile) return; setSavingProfile(true); try { await api('/auth/me', { method: 'PATCH', body: { displayName } }); setNotice('Profile saved.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); } finally { setSavingProfile(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+      <form onSubmit={async (e) => { e.preventDefault(); if (savingProfile) return; setSavingProfile(true); try { await api('/auth/me', { method: 'PATCH', body: { displayName, avatarKey } }); setNotice('Profile saved.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); } finally { setSavingProfile(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <FormField label="Display name"><input type="text" className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></FormField>
+        <fieldset style={{ border: 0, padding: 0, margin: '0 0 1rem' }}>
+          <legend style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Avatar</legend>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {AVATAR_OPTIONS.map((o) => (
+              <label key={o.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: avatarKey === o.key ? '2px solid #7d8b6a' : '1px solid #d9cbb2', borderRadius: '999px', padding: '0.3rem 0.7rem', cursor: 'pointer' }}>
+                <input type="radio" name="avatar" value={o.key} checked={avatarKey === o.key} onChange={() => setAvatarKey(o.key)} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
+                <span role="img" aria-label={o.label}>{o.emoji}</span> {o.label}
+              </label>
+            ))}
+          </div>
+          <p><small>Your avatar shows beside your name in the members list below.</small></p>
+        </fieldset>
         <button className="btn" type="submit" disabled={savingProfile}>{savingProfile ? 'Saving…' : 'Save profile'}</button>
       </form>
+      {space && (
+        <form onSubmit={async (e) => { e.preventDefault(); if (savingSpaceName || !spaceName.trim()) return; setSavingSpaceName(true); try { await api(`/spaces/${space.id}`, { method: 'PATCH', body: { name: spaceName.trim() } }); setNotice('Space renamed.'); await onSpaceChange?.(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not rename the space'); } finally { setSavingSpaceName(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+          <FormField label="Space name"><input type="text" className="field" value={spaceName} onChange={(e) => setSpaceName(e.target.value)} /></FormField>
+          <p><small>Either partner may rename the space.</small></p>
+          <button className="btn" type="submit" disabled={savingSpaceName || !spaceName.trim()}>{savingSpaceName ? 'Saving…' : 'Rename space'}</button>
+        </form>
+      )}
+      {space && (
+        <section className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
+          <h3 style={{ marginTop: 0 }}>Space members</h3>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.5rem' }}>
+            {space.members.map((m) => (
+              <li key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <AvatarBadge avatarKey={m.id === me.id ? avatarKey : m.avatarKey} displayName={m.displayName} />
+                <span>{m.displayName}{m.id === me.id ? ' (you)' : ''} · {m.role}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <form onSubmit={async (e) => { e.preventDefault(); if (changingPassword) return; setChangingPassword(true); try { const data = await api<{ csrfToken: string }>('/auth/password-change', { method: 'POST', body: { password: newPassword } }); setCsrf(data.csrfToken); setNotice('Password changed. Other sessions were signed out.'); setNewPassword(''); } catch (err) { setError(err instanceof Error ? err.message : 'Could not change password'); } finally { setChangingPassword(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <FormField label="New password (at least 10 characters)"><input className="field" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></FormField>
         <button className="btn" type="submit" disabled={changingPassword}>{changingPassword ? 'Saving…' : 'Change password'}</button>

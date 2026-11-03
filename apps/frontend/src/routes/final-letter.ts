@@ -1,11 +1,13 @@
 // ---------------------------------------------------------------------------
-// FINAL LETTER — editable draft copy.
-// This is the ONE editable location for the final star message letter.
-// The text below is draft copy to be personalised by its author later.
-// It is not presented as finished, handwritten, or signed copy: the UI
-// labels it plainly as a draft, and no signature, name, or date is added.
-// To personalise it, edit ONLY the paragraphs in FINAL_LETTER_PARAGRAPHS
-// in this file — do not scatter the letter text across other files.
+// FINAL LETTER — draft fallback copy.
+// The paragraphs below are the DRAFT shown until a partner saves
+// their own version in the app (DB-backed final message,
+// 'star-letter'): the saved text then replaces this draft
+// everywhere, labelled as edited by a partner. It is not presented
+// as finished, handwritten, or signed copy: the UI labels it
+// plainly as a draft, and no signature, name, or date is added.
+// Do not scatter letter text across other files: this file holds
+// the fallback only, and the app holds the partners' own version.
 // ---------------------------------------------------------------------------
 
 export const FINAL_LETTER_PARAGRAPHS: string[] = [

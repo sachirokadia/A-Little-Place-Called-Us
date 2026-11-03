@@ -56,6 +56,11 @@ export function ChestGame({ space, me }: { space: Space; me: Me }) {
   const [attemptNote, setAttemptNote] = useState<string | null>(null);
   const [attempting, setAttempting] = useState(false);
   const [relocking, setRelocking] = useState(false);
+  // Read-now: the reward is already returned by GET /chest-reward
+  // without unlocking (verified against the API), so this only
+  // reveals what the server already sent — it never changes the
+  // solve/unlock game, which stays exactly as-is below.
+  const [rewardShownEarly, setRewardShownEarly] = useState(false);
 
   const [newQuestion, setNewQuestion] = useState('');
   const [newAnswer, setNewAnswer] = useState('');
@@ -343,6 +348,30 @@ export function ChestGame({ space, me }: { space: Space; me: Me }) {
           </p>
           {attemptError && !currentRiddle && <ErrorBox message={attemptError} />}
         </div>
+      )}
+
+      {!unlocked && rewardConfigured && (
+        <Card>
+          <h3 style={{ marginTop: 0 }}>The reward, without solving</h3>
+          <p><small>You do not have to solve the riddles to read this — it is your partner&apos;s reward message, shown early on purpose. Solving still unlocks the chest as before.</small></p>
+          {rewardShownEarly ? (
+            <div role="status">
+              {reward!.message && <p>{reward!.message}</p>}
+              {reward!.memoryId && (
+                <p>
+                  <Link to="/memories">
+                    {reward!.memoryTitle ? `“${reward!.memoryTitle}” — ` : ''}See it on the Memory Wall →
+                  </Link>
+                </p>
+              )}
+              <p>
+                <button className="btn quiet" type="button" onClick={() => setRewardShownEarly(false)}>Hide the reward message</button>
+              </p>
+            </div>
+          ) : (
+            <button className="btn" type="button" onClick={() => setRewardShownEarly(true)}>Read the reward message now</button>
+          )}
+        </Card>
       )}
 
       {unlocked && (

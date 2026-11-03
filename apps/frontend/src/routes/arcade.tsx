@@ -17,6 +17,7 @@ import {
   type UnlockKey,
 } from './arcade-data.js';
 import { FINAL_LETTER_PARAGRAPHS } from './final-letter.js';
+import { getFinalMessage, joinParagraphs, saveFinalMessage, splitParagraphs, type FinalMessage } from '../lib/final-messages.js';
 
 // ---------------------------------------------------------------------------
 // Progress persistence: server first, localStorage fallback second.
@@ -716,6 +717,47 @@ export function ArcadeContent({ space, me }: { space: Space; me: Me }) {
   const [letterReplayKey, setLetterReplayKey] = useState(0);
   const replayLetter = () => setLetterReplayKey((k) => k + 1);
 
+  // DB-backed final star letter (personalisation): either partner
+  // may read and overwrite it. Until a row is saved, the code draft
+  // below is shown, still labelled as a draft; a saved row is never
+  // presented as the draft. Reading/editing is never gated on any
+  // game, score, or completion — only on this panel being open.
+  const [savedLetter, setSavedLetter] = useState<FinalMessage | null>(null);
+  const [editingLetter, setEditingLetter] = useState(false);
+  const [letterDraft, setLetterDraft] = useState('');
+  const [letterError, setLetterError] = useState<string | null>(null);
+  const [savingLetter, setSavingLetter] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getFinalMessage(space.id, 'star-letter')
+      .then((row) => { if (!cancelled) setSavedLetter(row); })
+      .catch(() => { /* No saved letter yet: the draft below is shown. */ });
+    return () => { cancelled = true; };
+  }, [space.id]);
+  const letterParagraphs = (() => {
+    const saved = savedLetter ? splitParagraphs(savedLetter.text) : [];
+    return saved.length > 0 ? saved : FINAL_LETTER_PARAGRAPHS;
+  })();
+  const startLetterEdit = () => {
+    setLetterDraft(savedLetter ? savedLetter.text : joinParagraphs(FINAL_LETTER_PARAGRAPHS));
+    setLetterError(null);
+    setEditingLetter(true);
+  };
+  const saveLetter = async () => {
+    if (!letterDraft.trim() || savingLetter) return;
+    setSavingLetter(true);
+    setLetterError(null);
+    try {
+      const saved = await saveFinalMessage(space.id, 'star-letter', letterDraft);
+      setSavedLetter(saved);
+      setEditingLetter(false);
+    } catch (err) {
+      setLetterError(err instanceof Error ? err.message : 'Could not save this letter.');
+    } finally {
+      setSavingLetter(false);
+    }
+  };
+
   const openStar = () => {
     try { localStorage.setItem('lp-hidden-step', 'arcade'); } catch { /* ignore */ }
     starClickedRef.current = true;
@@ -854,15 +896,38 @@ export function ArcadeContent({ space, me }: { space: Space; me: Me }) {
         {starRevealed && (
           <section className={styles.section} id="star-message" tabIndex={-1} aria-labelledby="star-message-heading">
             <h2 id="star-message-heading">The final star message</h2>
-            <p>Draft letter — to be personalised by its author later</p>
-            <div key={letterReplayKey} className={`${styles.letterPage} ${styles.letterOpen}`}>
-              {FINAL_LETTER_PARAGRAPHS.map((paragraph, i) => (
-                <p key={i} className={styles.letterParagraph}>{paragraph}</p>
-              ))}
-            </div>
-            <p>
-              <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={replayLetter}>Read it again</button>
-            </p>
+            <p>{savedLetter ? 'Edited by a partner — this replaces the original draft' : 'Draft letter — to be personalised by its author later'}</p>
+            {editingLetter ? (
+              <div>
+                <p><small>Write your own version below — separate paragraphs with a blank line. Saving replaces the draft for both partners.</small></p>
+                <textarea
+                  value={letterDraft}
+                  onChange={(e) => setLetterDraft(e.target.value)}
+                  rows={12}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  aria-label="Final star message"
+                />
+                {letterError && <p role="alert">{letterError}</p>}
+                <p style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                  <button className={styles.btn} type="button" onClick={() => void saveLetter()} disabled={savingLetter || !letterDraft.trim()}>
+                    {savingLetter ? 'Saving…' : 'Save this message'}
+                  </button>
+                  <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={() => setEditingLetter(false)}>Cancel</button>
+                </p>
+              </div>
+            ) : (
+              <>
+                <div key={letterReplayKey} className={`${styles.letterPage} ${styles.letterOpen}`}>
+                  {letterParagraphs.map((paragraph, i) => (
+                    <p key={i} className={styles.letterParagraph}>{paragraph}</p>
+                  ))}
+                </div>
+                <p style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                  <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={replayLetter}>Read it again</button>
+                  <button className={`${styles.btn} ${styles.btnQuiet}`} type="button" onClick={startLetterEdit}>Edit this message</button>
+                </p>
+              </>
+            )}
             <p><Link to="/">Back to Home →</Link></p>
           </section>
         )}

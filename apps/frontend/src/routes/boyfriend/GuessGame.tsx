@@ -34,6 +34,13 @@ export function GuessGame({ space, me }: { space: Space; me: Me }) {
   const [guesses, setGuesses] = useState<Record<string, string>>({});
   const [guessErrors, setGuessErrors] = useState<Record<string, string>>({});
   const [guessingId, setGuessingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editQuestion, setEditQuestion] = useState('');
+  const [editAnswer, setEditAnswer] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [roundError, setRoundError] = useState<string | null>(null);
 
   const memberName = useCallback((userId: string): string => {
     if (userId === me.id) return 'You';
@@ -76,6 +83,44 @@ export function GuessGame({ space, me }: { space: Space; me: Me }) {
     }
   };
 
+  const startEdit = (round: GuessRound) => {
+    setEditingId(round.id);
+    setEditQuestion(round.question);
+    // The answer is never sent back pre-filled: the server only
+    // returns it to the creator after reveal, so a blank answer
+    // field means "keep the current answer", never "erase it".
+    setEditAnswer('');
+    setEditError(null);
+  };
+
+  const saveEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingId || !editQuestion.trim()) return;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const body: Record<string, unknown> = { question: editQuestion.trim() };
+      if (editAnswer.trim()) body.answer = editAnswer.trim();
+      await api(`/spaces/${space.id}/guess-rounds/${editingId}`, { method: 'PATCH', body });
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not save this round.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteRound = async (id: string) => {
+    try {
+      await api(`/spaces/${space.id}/guess-rounds/${id}`, { method: 'DELETE' });
+      setConfirmDeleteId(null);
+      await load();
+    } catch (err) {
+      setRoundError(err instanceof Error ? err.message : 'Could not delete this round.');
+    }
+  };
+
   const submitGuess = async (round: GuessRound) => {
     const guess = (guesses[round.id] ?? '').trim();
     if (!guess) return;
@@ -104,6 +149,7 @@ export function GuessGame({ space, me }: { space: Space; me: Me }) {
 
   return (
     <div>
+      <ErrorBox message={roundError} />
       {rounds.length === 0 ? (
         <EmptyState title="No guess rounds yet" message="No guess rounds yet — create the first one below." />
       ) : (
@@ -118,7 +164,23 @@ export function GuessGame({ space, me }: { space: Space; me: Me }) {
                   Asked by {memberName(round.creatorId)} · Status: {round.revealed ? 'Revealed' : 'Open'}
                 </p>
 
-                {round.revealed ? (
+                {isCreator && editingId === round.id ? (
+                  <form onSubmit={(e) => void saveEdit(e)}>
+                    <FormField label="Question">
+                      <input type="text" value={editQuestion} onChange={(e) => setEditQuestion(e.target.value)} />
+                    </FormField>
+                    <FormField label="Answer (leave blank to keep the current answer)">
+                      <input type="text" value={editAnswer} onChange={(e) => setEditAnswer(e.target.value)} placeholder="New answer, or blank to keep it" />
+                    </FormField>
+                    <ErrorBox message={editError} />
+                    <p style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                      <button className="btn" type="submit" disabled={savingEdit || !editQuestion.trim()}>
+                        {savingEdit ? 'Saving…' : 'Save round'}
+                      </button>
+                      <button className="btn quiet" type="button" onClick={() => setEditingId(null)}>Cancel</button>
+                    </p>
+                  </form>
+                ) : round.revealed ? (
                   <div role="status">
                     {round.guessText !== undefined && <p>Guess: <strong>{round.guessText}</strong></p>}
                     {round.answer !== undefined && <p>Answer: <strong>{round.answer}</strong></p>}
@@ -155,6 +217,21 @@ export function GuessGame({ space, me }: { space: Space; me: Me }) {
                     </button>
                     <p><small>You get exactly one guess for each round.</small></p>
                   </form>
+                )}
+                {isCreator && editingId !== round.id && (
+                  <p style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                    {!round.revealed && (
+                      <button className="btn quiet" type="button" onClick={() => startEdit(round)}>Edit</button>
+                    )}
+                    {confirmDeleteId === round.id ? (
+                      <>
+                        <button className="btn" type="button" onClick={() => void deleteRound(round.id)}>Delete this round — confirm</button>
+                        <button className="btn quiet" type="button" onClick={() => setConfirmDeleteId(null)}>Keep it</button>
+                      </>
+                    ) : (
+                      <button className="btn quiet" type="button" onClick={() => setConfirmDeleteId(round.id)}>Delete</button>
+                    )}
+                  </p>
                 )}
               </Card>
             );
