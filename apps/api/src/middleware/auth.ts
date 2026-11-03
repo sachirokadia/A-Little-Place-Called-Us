@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { config } from '../config.js';
 import { prisma } from '../db.js';
-import { ApiError, unauthorized } from '../errors.js';
+import { ApiError } from '../errors.js';
 import { hashEquals, randomToken, sha256Hex } from '../lib/crypto.js';
 
 export const SESSION_COOKIE = 'lp_session';
@@ -62,11 +62,6 @@ export async function resolveSession(req: Request, _res: Response, next: NextFun
   } catch {
     return next();
   }
-}
-
-export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
-  if (!req.user || !req.session) return next(unauthorized());
-  return next();
 }
 
 // CSRF (spec §4.8 step 3, §4.8a).

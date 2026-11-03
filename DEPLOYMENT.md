@@ -85,7 +85,8 @@ host, and the browser sees one origin.
   `prisma migrate deploy` (script: `npm --workspace @little-place/api run
   db:migrate:deploy`):
   `20251101000000_init`, `20251102000000_game_progress`,
-  `20251103000000_user_preferences`.
+  `20251103000000_user_preferences`, `20251104000000_boyfriend_arcade`,
+  `20251105000000_hero_adventure`, `20251106000000_board_game`.
 - **Never run `prisma db push` against production.** Migrations are the
   sole schema authority.
 - There is **no data migration** from the old application: no old records,
@@ -107,7 +108,8 @@ done by this document, and no provider, bucket, or key is named here.
 ## SPA fallback (deep links and refreshes)
 
 The frontend uses `BrowserRouter`, so opening or refreshing a deep link
-such as `/memories`, `/letters`, `/quiet`, `/appreciations`, `/future`,
+such as `/memories`, `/letters`, `/quiet`, `/appreciations`,
+`/appreciations/favourites`, `/future`, `/reminders`,
 `/arcade`, `/deleted`, `/settings`, `/space`, or `/welcome` must serve
 `index.html` and let the router render the room — otherwise the host
 returns a 404 for a valid room. The repo-root `vercel.json` provides
@@ -142,7 +144,8 @@ exist, and it must contain no real values.
       survive a refresh.
 - [ ] Every destination opens by direct link and after refresh:
       Home, Memory Wall, Letters, Quiet Room, Things I See in You,
-      Our Future, Secret Arcade, plus Deleted, Settings, Space, /welcome.
+      Things I See in You favourites (`/appreciations/favourites`),
+      Our Future, Reminder Room (`/reminders`), Secret Arcade, plus Deleted, Settings, Space, /welcome.
 - [ ] A created shared record persists after refresh, sign-out/sign-in,
       and is visible to the second partner's account.
 - [ ] Private drafts and journals are invisible to the other partner,

@@ -1,10 +1,17 @@
 import { z } from 'zod';
 
 export const uuid = z.string().uuid();
+// Strict calendar-date check: Date.parse normalises impossible
+// dates (2026-02-30 becomes 2026-03-02), so the parsed components
+// must round-trip exactly, otherwise the date is rejected.
 export const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a calendar date YYYY-MM-DD')
-  .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)), 'Not a real date');
+  .refine((s) => {
+    const [y, m, d] = s.split('-').map(Number);
+    const parsed = new Date(Date.UTC(y!, m! - 1, d!));
+    return parsed.getUTCFullYear() === y && parsed.getUTCMonth() === m! - 1 && parsed.getUTCDate() === d;
+  }, 'Not a real date');
 
 const title = z.string().trim().min(1).max(200);
 const shortText = z.string().trim().max(2000);
@@ -96,7 +103,7 @@ export const planCompleteSchema = z.object({
 });
 
 export const reminderKind = z.enum(['note', 'prompt']);
-export const reminderCreateSchema = z.object({ text: shortText, kind: reminderKind });
+export const reminderCreateSchema = z.object({ text: z.string().trim().min(1).max(2000), kind: reminderKind });
 export const reminderUpdateSchema = reminderCreateSchema.partial();
 
 export const voiceNoteCreateSchema = z.object({ title });

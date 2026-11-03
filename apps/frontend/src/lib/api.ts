@@ -24,6 +24,16 @@ async function fetchCsrf(): Promise<string> {
 
 export interface ApiOptions { method?: string; body?: unknown; form?: FormData; idempotencyKey?: string; raw?: boolean }
 
+/** Error carrying the HTTP status, so callers can tell a genuine
+ * 401 (signed out) from a transient 429/5xx (session unknown). */
+export class ApiRequestError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const doFetch = async (token: string | null): Promise<Response> => {
@@ -54,7 +64,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const message = (body as { error?: { message?: string } }).error?.message ?? `Request failed (${res.status})`;
-    throw new Error(message);
+    throw new ApiRequestError(res.status, message);
   }
   // raw: return the whole response body (used by the export download,
   // which tolerates both an envelope and a bare JSON object).

@@ -111,7 +111,7 @@ function EditForm({ item, singular, onDone, onCancel }: { item: AnyItem; singula
           ) : key === 'revealAt' ? (
             <input className="field" type="datetime-local" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
           ) : (
-            <input className="field" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
+            <input type="text" className="field" value={value} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
           )}
         </FormField>
       ))}
@@ -188,7 +188,10 @@ function ItemCard({ item, singular, me, onRefresh, extra, envelopeMode, polaroid
       {galleryNode}
       {!galleryMode && bodyNode}
       {!galleryMode && storyNode}
-      {item.text && !item.title && !galleryMode ? <p>{item.text as string}</p> : null}
+      {/* No separate text paragraph: when an item has no title, the
+          heading above already renders its text (title falls back to
+          text), so a second paragraph would duplicate it verbatim —
+          that was the Reminder Room title/body duplication. */}
       {item.detail ? <p>{item.detail as string}</p> : null}
       {item.happenedOn ? <p><small>Date: {fmtDate(item.happenedOn)}</small></p> : null}
       {polaroidMode && item.happenedOn ? <div className="ticket-stub" aria-hidden="true"><span>✂ ticket</span><span>{fmtDate(item.happenedOn)}</span></div> : null}
@@ -584,7 +587,7 @@ function VoiceNotes({ space }: { space: Space }) {
     <div>
       <form onSubmit={async (e) => { e.preventDefault(); if (!title || submitting) return; setFormError(null); setSubmitting(true); try { await api(`/spaces/${space.id}/voice-notes`, { method: 'POST', body: { title }, idempotencyKey: crypto.randomUUID() }); setTitle(''); await refresh(); } catch (err) { setFormError(err instanceof Error ? err.message : 'Could not save'); } finally { setSubmitting(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <ErrorBox message={formError} />
-        <FormField label="Voice note title"><input className="field" value={title} onChange={(e) => setTitle(e.target.value)} /></FormField>
+        <FormField label="Voice note title"><input type="text" className="field" value={title} onChange={(e) => setTitle(e.target.value)} /></FormField>
         <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Add voice note'}</button>
       </form>
       {error ? <ErrorState message={error} onRetry={refresh} />
@@ -749,7 +752,7 @@ export function FuturePage({ me, space }: { me: Me; space: Space }) {
             {item.status === 'planned' ? (
               <form onSubmit={async (e) => { e.preventDefault(); const form = e.target as HTMLFormElement; const createMemory = (form.elements.namedItem('createMemory') as HTMLInputElement).checked; const caption = (form.elements.namedItem('memoryCaption') as HTMLInputElement).value; await api(`/plan/${item.id}/complete`, { method: 'POST', body: { createMemory, memoryTitle: item.title as string, memoryCaption: caption } }); refresh(); refreshMemories(); }}>
                 <label><input type="checkbox" name="createMemory" defaultChecked /> Also create a Memory Wall keepsake</label>{' '}
-                <FormField label="Keepsake caption (optional)"><input className="field" name="memoryCaption" /></FormField>
+                <FormField label="Keepsake caption (optional)"><input type="text" className="field" name="memoryCaption" /></FormField>
                 <button className="btn secondary" type="submit">Mark complete ✓</button>
               </form>
             ) : (
@@ -1004,7 +1007,6 @@ export function HomePage({ me, space, onSpaceChange }: { me: Me; space: Space | 
           You are not in a space yet. <Link to="/space">Create a space or join one</Link> to start sharing.
         </div>
       )}
-      <p style={{ textAlign: 'center', marginTop: '2rem', color: '#6b5646' }}>This little world grows when we both add to it.</p>
     </div>
   );
 }
@@ -1021,7 +1023,7 @@ function RemindersSection({ space }: { space: Space }) {
       <p><small>Supportive notes with no reply expected — just little things left for each other. <Link to="/reminders">Open the Reminder Room →</Link></small></p>
       <form onSubmit={async (e) => { e.preventDefault(); if (!text || submitting) return; setFormError(null); setSubmitting(true); try { await api(`/spaces/${space.id}/reminders`, { method: 'POST', body: { text, kind: 'note' }, idempotencyKey: crypto.randomUUID() }); setText(''); await refresh(); } catch (err) { setFormError(err instanceof Error ? err.message : 'Could not save'); } finally { setSubmitting(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
         <ErrorBox message={formError} />
-        <FormField label="A note for both of you"><input className="field" value={text} onChange={(e) => setText(e.target.value)} /></FormField>
+        <FormField label="A note for both of you"><input type="text" className="field" value={text} onChange={(e) => setText(e.target.value)} /></FormField>
         <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Leave a reminder'}</button>{' '}
         <button className="btn quiet" type="button" onClick={async () => { const r = await api<AnyItem | null>(`/spaces/${space.id}/reminders/random`); setRandom(r); }}>Random reminder</button>
       </form>
@@ -1095,7 +1097,7 @@ export function AuthPage({ mode, onSignedIn }: { mode: 'login' | 'register'; onS
       <ErrorBox message={error} />
       <form onSubmit={submit} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', maxWidth: 480 }}>
         <FormField label="Email"><input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></FormField>
-        {mode === 'register' && <FormField label="Display name"><input className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></FormField>}
+        {mode === 'register' && <FormField label="Display name"><input type="text" className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></FormField>}
         <FormField label="Password (at least 10 characters)"><input className="field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></FormField>
         <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Saving…' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
       </form>
@@ -1121,11 +1123,11 @@ export function SpaceForms({ onSpaceChange }: { onSpaceChange: () => Promise<voi
       <ErrorBox message={error} />
       {notice && <p className="notice">{notice}</p>}
       <form onSubmit={async (e) => { e.preventDefault(); if (creating) return; setError(null); setCreating(true); try { await api('/spaces', { method: 'POST', body: { name } }); setNotice('Space created.'); await onSpaceChange(); navigate('/welcome'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not create a space'); } finally { setCreating(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
-        <FormField label="Space name"><input className="field" value={name} onChange={(e) => setName(e.target.value)} /></FormField>
+        <FormField label="Space name"><input type="text" className="field" value={name} onChange={(e) => setName(e.target.value)} /></FormField>
         <button className="btn" type="submit" disabled={creating}>{creating ? 'Saving…' : 'Create a space'}</button>
       </form>
       <form onSubmit={async (e) => { e.preventDefault(); if (joining) return; setError(null); setJoining(true); try { await api('/spaces/invitations/join', { method: 'POST', body: { token } }); setNotice('Joined!'); await onSpaceChange(); navigate('/welcome'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not join'); } finally { setJoining(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem' }}>
-        <FormField label="Invitation token"><input className="field" value={token} onChange={(e) => setToken(e.target.value)} /></FormField>
+        <FormField label="Invitation token"><input type="text" className="field" value={token} onChange={(e) => setToken(e.target.value)} /></FormField>
         <button className="btn secondary" type="submit" disabled={joining}>{joining ? 'Saving…' : 'Join a space'}</button>
       </form>
       <p><small>Invitation tokens are long, single-use tokens in Phase 1A. A short-code option is still undecided (R4).</small></p>
@@ -1321,7 +1323,7 @@ export function SettingsPage({ me, space, onSignedOut }: { me: Me; space: Space 
       <ErrorBox message={error} />
       {notice && <p className="notice">{notice}</p>}
       <form onSubmit={async (e) => { e.preventDefault(); if (savingProfile) return; setSavingProfile(true); try { await api('/auth/me', { method: 'PATCH', body: { displayName } }); setNotice('Profile saved.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save'); } finally { setSavingProfile(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>
-        <FormField label="Display name"><input className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></FormField>
+        <FormField label="Display name"><input type="text" className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></FormField>
         <button className="btn" type="submit" disabled={savingProfile}>{savingProfile ? 'Saving…' : 'Save profile'}</button>
       </form>
       <form onSubmit={async (e) => { e.preventDefault(); if (changingPassword) return; setChangingPassword(true); try { const data = await api<{ csrfToken: string }>('/auth/password-change', { method: 'POST', body: { password: newPassword } }); setCsrf(data.csrfToken); setNotice('Password changed. Other sessions were signed out.'); setNewPassword(''); } catch (err) { setError(err instanceof Error ? err.message : 'Could not change password'); } finally { setChangingPassword(false); } }} className="paper" style={{ borderRadius: '0.75rem', padding: '1rem', marginBottom: '1rem' }}>

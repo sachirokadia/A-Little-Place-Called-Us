@@ -23,7 +23,7 @@
   min-height: 44px;
   min-width: 44px;
   padding: 0.6rem 1rem;
-  background: #c94f4f;
+  background: #a83e3e;
   border: 3px solid #2b2118;
   border-radius: 0.25rem;
   box-shadow: 0 3px 0 #2b2118;
@@ -137,8 +137,9 @@
   border-radius: 0.25rem;
   padding: 4px 5px;
   min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  /* Break only long unbroken tokens that would overflow; real words
+     wrap at spaces and are never split mid-word ("Booksho p"). */
+  overflow-wrap: break-word;
   display: flex;
   flex-direction: column;
   gap: 2px;

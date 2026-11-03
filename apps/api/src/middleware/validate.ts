@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { ZodSchema } from 'zod';
 import { badRequest } from '../errors.js';
-
 export function validateBody<T>(schema: ZodSchema<T>) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const parsed = schema.safeParse(req.body ?? {});
@@ -25,10 +24,3 @@ export function validateQuery<T>(schema: ZodSchema<T>) {
   };
 }
 
-export function requireUuidParam(req: Request, _res: Response, next: NextFunction, name: string): string {
-  const value = req.params[name];
-  if (!value || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
-    throw badRequest('Invalid id');
-  }
-  return value;
-}

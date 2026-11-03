@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 export function BackHome() {
@@ -27,10 +27,23 @@ export function Card({ children, rotate = 0 }: { children: ReactNode; rotate?: n
 }
 
 export function FormField({ label, children }: { label: string; children: ReactNode }) {
+  // Programmatic association with no visual change: a single
+  // input/select/textarea child gets an id and the label points at
+  // it via htmlFor. A multi-control child (e.g. the quiz option
+  // editor, whose inputs already carry their own aria-labels) keeps
+  // the previous plain label — no id is invented for a group.
+  const generatedId = useId();
+  let control = children;
+  let controlId: string | undefined;
+  if (isValidElement(children) && (children.type === 'input' || children.type === 'select' || children.type === 'textarea')) {
+    const props = children.props as { id?: string };
+    controlId = props.id ?? generatedId;
+    control = cloneElement(children as ReactElement<{ id?: string }>, { id: controlId });
+  }
   return (
     <div style={{ marginBottom: '0.8rem' }}>
-      <label>{label}</label>
-      {children}
+      <label htmlFor={controlId}>{label}</label>
+      {control}
     </div>
   );
 }

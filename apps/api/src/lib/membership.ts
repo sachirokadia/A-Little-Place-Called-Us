@@ -10,17 +10,6 @@ export async function requireSpaceMember(userId: string, spaceId: string): Promi
   return spaceId;
 }
 
-export async function callerSpaceId(userId: string): Promise<string | null> {
-  const member = await prisma.spaceMember.findUnique({ where: { userId } });
-  return member?.spaceId ?? null;
-}
-
-// Authorized lookup helper for a content row: the query itself must
-// include space + (optionally) author predicates.
-export async function spaceOfItem(spaceId: string, userId: string): Promise<void> {
-  await requireSpaceMember(userId, spaceId);
-}
-
 export function assertAuthor(authorId: string, userId: string): void {
   if (authorId !== userId) throw forbidden();
 }

@@ -1,7 +1,5 @@
-// Phase 1 schema — core plus a minimal, route-less GameProgress model.
-// Playable games and board are Phase 1B and are deliberately NOT in
-// this schema, and there is NO score endpoint: this model only reserves
-// the shape Phase 1B will use, with server-validated progress data.
+// Phase 1 schema — core plus GameProgress, now read and written by
+// the Phase 1B game routes (boyfriend arcade, hero adventure, board).
 // Prisma is the sole schema authority; there is no boot-time
 // CREATE TABLE and no second migration system.
 // CHECK constraints that Prisma cannot express live in the reviewed
@@ -420,9 +418,10 @@ model IdempotencyKey {
   @@index([userId, expiresAt])
 }
 
-// Phase 1B-ready only: no API route reads or writes this model yet,
-// and no client score is ever trusted. Progress is opaque JSON that
-// Phase 1B server validation will bound and check before storing.
+// GameProgress model: read and written by the Phase 1B game routes
+// (boyfriend arcade, hero adventure, board), with server-validated
+// progress data; no client score is ever trusted. Progress is opaque
+// JSON that Phase 1B server validation bounds and checks before storing.
 model GameProgress {
   id        String   @id @default(uuid())
   spaceId   String

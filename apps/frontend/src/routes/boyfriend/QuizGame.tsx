@@ -244,6 +244,7 @@ export function QuizGame({ space, me }: { space: Space; me: Me }) {
       {draftValue.options.map((opt, i) => (
         <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
           <input
+            type="text"
             id={`${idPrefix}-option-${i}`}
             className="field"
             value={opt}
@@ -451,6 +452,7 @@ export function QuizGame({ space, me }: { space: Space; me: Me }) {
                         <p><small>The correct answer is not shown here — the quiz never reveals it before submission — so please pick it again when you edit.</small></p>
                         <FormField label="Question">
                           <input
+                            type="text"
                             className="field"
                             value={editDraft.question}
                             maxLength={300}
@@ -475,6 +477,7 @@ export function QuizGame({ space, me }: { space: Space; me: Me }) {
             <h4 style={{ marginBottom: '0.5rem' }}>Add a question</h4>
             <FormField label="Question">
               <input
+                type="text"
                 className="field"
                 value={draft.question}
                 maxLength={300}

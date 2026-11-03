@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import { applyMotionPreference, getMe, getPreferences, getSpace, setCsrf, type Me, type Space } from './lib/api.js';
+import { applyMotionPreference, ApiRequestError, getMe, getPreferences, getSpace, setCsrf, type Me, type Space } from './lib/api.js';
 import { LoadingState } from './components/ui.js';
 import {
   AppreciationsPage, ArcadePage, AuthPage, DeletedPage, FavouritesPage, FuturePage,
@@ -23,7 +23,7 @@ function Nav({ me, space }: { me: Me | null; space: Space | null }) {
     <nav className="site-nav" aria-label="Main destinations">
       <NavLink to="/" end className="brand serif">A Little Place Called Us</NavLink>
       {DESTINATIONS.map((d) => (
-        <NavLink key={d.to} to={d.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
+        <NavLink key={d.to} to={d.to} end={d.to === '/appreciations'} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
           {d.label}
         </NavLink>
       ))}
@@ -40,11 +40,16 @@ export default function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [space, setSpace] = useState<Space | null>(null);
   const [checked, setChecked] = useState(false);
+  // Transient session-check failure (429/5xx): the session was never
+  // revoked, so this is "unknown", not "signed out" — the user is
+  // offered a retry instead of being bounced to /login.
+  const [sessionUnknown, setSessionUnknown] = useState(false);
 
   const refresh = async () => {
     try {
       const m = await getMe();
       setMe(m);
+      setSessionUnknown(false);
       // Apply the account motion preference after sign-in (and on
       // refresh): only 'reduce' adds the class; 'system' is left to
       // the OS media query and 'full' never adds it.
@@ -61,9 +66,17 @@ export default function App() {
       } catch {
         setSpace(null);
       }
-    } catch {
-      setMe(null);
-      setSpace(null);
+    } catch (err) {
+      // Genuine 401 (or any other non-transient failure) still means
+      // signed out, exactly as before. Only 429/5xx keep the previous
+      // session state and surface a retry instead of a login bounce.
+      if (err instanceof ApiRequestError && (err.status === 429 || err.status >= 500)) {
+        setSessionUnknown(true);
+      } else {
+        setMe(null);
+        setSpace(null);
+        setSessionUnknown(false);
+      }
     } finally {
       setChecked(true);
     }
@@ -73,12 +86,30 @@ export default function App() {
 
   if (!checked) return <div className="page"><LoadingState /></div>;
 
+  // No signed-in user yet and the session check itself failed
+  // transiently: retry, do not redirect to /login.
+  if (sessionUnknown && !me) {
+    return (
+      <div className="page">
+        <h1 className="page-title">Couldn&apos;t reach your little place</h1>
+        <p>Your session was not signed out — the server was just too busy or briefly unavailable. Try again in a moment.</p>
+        <button className="btn" type="button" onClick={() => { setChecked(false); void refresh(); }}>Try again</button>
+      </div>
+    );
+  }
+
   const signedIn = !!me;
   const signedOut = <Navigate to="/login" replace />;
 
   return (
     <BrowserRouter>
       <Nav me={me} space={space} />
+      {sessionUnknown && me && (
+        <div className="notice" role="status" style={{ margin: '0.75rem auto', maxWidth: 900 }}>
+          The last session check was briefly unavailable — you are still signed in.{' '}
+          <button className="btn quiet" type="button" onClick={() => void refresh()}>Check again</button>
+        </div>
+      )}
       <Routes>
         <Route path="/login" element={signedIn ? <Navigate to="/" replace /> : <AuthPage mode="login" onSignedIn={refresh} />} />
         <Route path="/register" element={signedIn ? <Navigate to="/welcome" replace /> : <AuthPage mode="register" onSignedIn={refresh} />} />
@@ -94,7 +125,7 @@ export default function App() {
         <Route path="/reminders" element={signedIn && space ? <RemindersPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/arcade" element={signedIn && space ? <ArcadePage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
         <Route path="/deleted" element={signedIn && space ? <DeletedPage me={me} space={space} /> : signedIn ? <Navigate to="/space" replace /> : signedOut} />
-        <Route path="/settings" element={signedIn ? <SettingsPage me={me} space={space} onSignedOut={() => { setMe(null); setSpace(null); setCsrf(null); }} /> : signedOut} />
+        <Route path="/settings" element={signedIn ? <SettingsPage me={me} space={space} onSignedOut={() => { setMe(null); setSpace(null); setCsrf(null); setSessionUnknown(false); }} /> : signedOut} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <footer style={{ textAlign: 'center', padding: '1rem', color: '#6b5646' }}>

@@ -205,6 +205,13 @@ function makeRoutes(kind: ContentKind, createSchema: ZodSchema<unknown>, updateS
       const id = req.params.id ?? '';
       const row = await d.findFirst({ where: { id, deletedAt: null } });
       if (!row) throw notFound();
+      // Membership is checked against the row's own space BEFORE
+      // visibility: without this, any authenticated user who knew an
+      // id could read another space's shared rows through this
+      // singular detail route (the list routes are space-scoped and
+      // already check membership; this route is not). Non-members
+      // get the same generic 404 as a non-existent row.
+      await requireSpaceMember(req.user.id, row.spaceId as string);
       // Visibility is re-checked against the row's own space.
       const where = visibilityWhere(kind, row.spaceId as string, req.user.id, false);
       const visible = await d.findFirst({ where: { id, ...where } });
