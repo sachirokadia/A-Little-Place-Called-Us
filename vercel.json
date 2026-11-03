@@ -1,1 +1,63 @@
-{"$comment":"PREPARATION ONLY — Phase 7. This file is NOT an applied deployment: no Vercel project has been reconfigured, no API host exists yet, and no deployment has been made from it. See DEPLOYMENT.md before using it. The rewrites below cover only the app's real routes; they deliberately do NOT include an /api proxy, because the API host does not exist yet — when one does, its /api rewrite must be added BEFORE these SPA fallbacks (rewrites are evaluated in order) so that API calls are not swallowed by /index.html.","buildCommand":"npm --workspace @little-place/frontend run build","outputDirectory":"apps/frontend/dist","rewrites":[{"destination":"/index.html","source":"/login"},{"destination":"/index.html","source":"/register"},{"destination":"/index.html","source":"/welcome"},{"destination":"/index.html","source":"/space"},{"destination":"/index.html","source":"/memories"},{"destination":"/index.html","source":"/letters"},{"destination":"/index.html","source":"/quiet"},{"destination":"/index.html","source":"/appreciations"},{"destination":"/index.html","source":"/appreciations/favourites"},{"destination":"/index.html","source":"/future"},{"destination":"/index.html","source":"/reminders"},{"destination":"/index.html","source":"/arcade"},{"destination":"/index.html","source":"/deleted"},{"destination":"/index.html","source":"/settings"}]}
+{
+  "$comment": "Live deployment (new stack, separate project). The API runs as a Vercel Serverless Function from api/v1/[...all].ts in this same project, so /api is same-origin by construction (session cookie is SameSite=lax). Filesystem routing serves /api/v1/* from that function before these SPA rewrites, so no /api proxy rewrite is needed or added. Build: scripts/vercel-build.sh (shared + Prisma generate + API build + prisma migrate deploy with POSTGRES_URL_NON_POOLING + frontend build). Uploads use the dev-only local backend under /tmp in serverless and are NON-DURABLE until a production storage provider is decided \u2014 see DEPLOYMENT.md.",
+  "buildCommand": "bash scripts/vercel-build.sh",
+  "outputDirectory": "apps/frontend/dist",
+  "rewrites": [
+    {
+      "destination": "/index.html",
+      "source": "/login"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/register"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/welcome"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/space"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/memories"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/letters"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/quiet"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/appreciations"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/appreciations/favourites"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/future"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/reminders"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/arcade"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/deleted"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/settings"
+    }
+  ]
+}

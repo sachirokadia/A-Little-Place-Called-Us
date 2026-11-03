@@ -1,11 +1,12 @@
 # Deployment guide — A Little Place Called Us (new stack)
 
-> **Status: PREPARATION ONLY — nothing here has been applied.**
-> No deployment has been made from this document, no hosting project has
-> been reconfigured, no database has been created, and no storage provider
-> has been chosen. The verified production build exists only locally (see
-> "Verification checklist" below). Do not announce a live URL from this
-> document: there is none yet.
+> **Status: DEPLOYMENT IN PROGRESS — a new, separate Vercel project has been
+> created (see below) and the API serverless adaptation is committed, but
+> the live URL is NOT yet verified.** No deployment has been announced.
+> The old Vercel project `a-little-place-called-us` is untouched and still
+> serves the old application. Do not announce a live URL from this
+> document until the verification checklist below has been run against
+> the real live URL and every item passes.
 
 ## What is being deployed
 
@@ -63,14 +64,18 @@ break authentication in the browser, so the viable production model is a
 **same-origin proxy**: the frontend host rewrites `/api/*` to the API
 host, and the browser sees one origin.
 
-- The repo-root `vercel.json` (Phase 7, preparation only) contains **only**
-  SPA fallback rewrites for the app's real routes. It deliberately contains
-  **no `/api` proxy destination, because the API host does not exist yet**
-  and no URL may be guessed.
-- When an API host exists, add its `/api` rewrite **before** the SPA
-  fallbacks in `vercel.json` (rewrites are evaluated in order), so API
-  calls are not swallowed by `/index.html`, and set `FRONTEND_ORIGIN` to
-  the production site origin.
+- The API runs as a Vercel Serverless Function in the SAME project as
+  the frontend: `api/v1/[...all].ts` wraps the existing Express app
+  (`apps/api/dist/app.js`, built by `scripts/vercel-build.sh`) without
+  replacing the long-running server used in local development
+  (`node dist/index.js`). Filesystem routing serves `/api/v1/*` from
+  that function before the SPA fallbacks, so `/api` is same-origin by
+  construction and NO `/api` proxy rewrite is needed or added.
+- The function maps the Vercel Postgres pooled URL onto `DATABASE_URL`
+  (`POSTGRES_PRISMA_URL`, else `POSTGRES_URL`) before importing the app,
+  and writes dev-only local storage under `/tmp` (non-durable — see
+  "Storage limitation"). Migrations run at build time from
+  `POSTGRES_URL_NON_POOLING` (never through a pooler, never `db:push`).
 - Do not deploy the frontend alone and point it at a cross-origin API:
   sign-in would appear to succeed and then fail on the first
   authenticated call.
@@ -86,7 +91,7 @@ host, and the browser sees one origin.
   db:migrate:deploy`):
   `20251101000000_init`, `20251102000000_game_progress`,
   `20251103000000_user_preferences`, `20251104000000_boyfriend_arcade`,
-  `20251105000000_hero_adventure`, `20251106000000_board_game`.
+  `20251105000000_hero_adventure`, `20251106000000_board_game`, `20251107000000_final_messages`.
 - **Never run `prisma db push` against production.** Migrations are the
   sole schema authority.
 - There is **no data migration** from the old application: no old records,
@@ -161,16 +166,42 @@ exist, and it must contain no real values.
 - [ ] No credential, token, or secret appears in source, logs,
       screenshots, or any public page.
 
+## Live deployment (new project, separate from the old app)
+
+- **Vercel project:** `a-little-place-called-us-new`
+  (`prj_BjkJ21Gs2t026kuOVqOcb4hbKprP`), created in the same team account
+  as the old project. The old project `a-little-place-called-us`
+  (`prj_5KOVZf2rilHxazfLcT5Bx1cMfr3W`) was NOT touched, reconfigured, or
+  redeployed. SSO protection is disabled on the new project so it is
+  publicly reachable; `NODE_ENV=production` and `FRONTEND_ORIGIN` (the new
+  project's production origin) are set as project environment variables.
+- **Database store:** `little-place-called-us-db` — a free Neon-backed
+  Vercel Postgres store, Status Available. It must be CONNECTED to the
+  new project through Vercel's own mechanism (dashboard: project →
+  Storage → connect the store) so its connection variables land as
+  project environment variables. No connection string, password, or token
+  is recorded anywhere in this repository, and none may be pasted into
+  chat, reports, files, or git history. Until the store is connected,
+  the build's migration step fails closed and no working deployment
+  exists — that failure is by design, not a bug to work around by
+  inventing a database URL.
+- **Build:** `scripts/vercel-build.sh` (shared build → Prisma generate →
+  API build → `prisma migrate deploy` from `POSTGRES_URL_NON_POOLING` →
+  frontend build), driven by the repo-root `vercel.json`.
+
 ## Current blockers (exact, not worked around)
 
 - **Vercel project:** the existing project `a-little-place-called-us`
-  currently serves the **old** application; pushes of the new stack to
-  GitHub main have not triggered Vercel builds for it, and project
-  inspection is blocked on team scope (403). No Vercel reconfiguration
-  has been made from this repository, and none should be assumed.
-- **No hosted database:** no hosted PostgreSQL `DATABASE_URL` exists on
-  file, and no Render (or other API-host) account access is available
-  from this environment.
+  currently serves the **old** application and is deliberately untouched;
+  the new stack deploys to the separate project
+  `a-little-place-called-us-new` (see "Live deployment" above). Team-scoped
+  writes through the connector return 403; project creation and reads
+  without an explicit team scope succeeded.
+- **Database not yet connected:** the `little-place-called-us-db` Postgres
+  store exists (see "Live deployment" above) but is NOT yet connected to
+  the new project, so no `DATABASE_URL`/`POSTGRES_*` variables exist on
+  the project yet. Connect it through Vercel's own mechanism; do not
+  paste any connection string anywhere.
 - **Cookie model:** same-origin `/api` proxy required (above); it cannot
   be configured until the API host exists.
 - **Storage:** production provider undecided (R2); local filesystem is
