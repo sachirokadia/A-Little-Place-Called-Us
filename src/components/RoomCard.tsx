@@ -23,9 +23,9 @@ export function RoomCard({ id, name, line, icon, bg, rot, doodle, onOpen }: {
       aria-label={`Open ${name}`}
       data-room={id}
       style={{ transform: `rotate(${rot})` }}
-      className={`room-tile w-full rounded-3xl border border-cocoa/20 p-5 text-left shadow-[0_10px_24px_rgba(81,68,61,0.10)] ${bg}`}
+      className={`room-tile w-full rounded-card border border-cocoa/20 p-5 text-left shadow-card ${bg}`}
     >
-      <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-full border border-cocoa/25 bg-paper text-xl text-cocoa">
+      <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-chip border border-cocoa/25 bg-paper text-xl text-cocoa">
         {icon}
       </span>
       <span className="font-serif-display mt-3 block text-2xl leading-snug text-cocoa">{name}</span>

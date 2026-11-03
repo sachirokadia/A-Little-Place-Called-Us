@@ -1,10 +1,12 @@
-export type RoomId = 'home' | 'reminders' | 'memories' | 'letters' | 'quiet' | 'appreciations' | 'future' | 'arcade' | 'deleted' | 'settings';
+export type RoomId = 'home' | 'reminders' | 'memories' | 'letters' | 'quiet' | 'appreciations' | 'future' | 'arcade' | 'deleted' | 'settings' | 'keepsakes' | 'search';
 
 export interface Profile {
   id: string;
   displayName: string;
   /** short label shown as author, e.g. "You" / partner name once set */
   shortName: string;
+  /** Phase 11 avatar preset key (e.g. 'bunny'), or undefined for the initial letter. Stored in avatar_path in both databases. */
+  avatar?: string;
 }
 
 export interface Space {

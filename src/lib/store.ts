@@ -205,7 +205,21 @@ export class PlaceStore {
       this.version++;
       return;
     }
-    if (this.mode === 'supabase' && supabase) await this.supabaseDelete(collection, id);
+    // Permanent deletion must also delete the stored file. Previously
+    // purge() deleted only the database row, leaving the photo/voice
+    // file in the bucket as an orphan retrievable by a retained path
+    // or signed URL. The row delete happens first; the file delete is
+    // best-effort (a file already gone must not block the purge).
+    // Note: signed URLs issued before this point stay valid until
+    // their 1-hour expiry — deleting the object does not revoke them.
+    const item = (this.data[collection] as AnyItem[]).find((i) => i.id === id);
+    const filePaths = item ? [ (item as { mediaPath?: string }).mediaPath, (item as { completionPhotoPath?: string }).completionPhotoPath ].filter((p): p is string => !!p) : [];
+    if (this.mode === 'supabase' && supabase) {
+      await this.supabaseDelete(collection, id);
+      if (filePaths.length > 0) {
+        await supabase.storage.from('private-media').remove(filePaths).then(() => { /* best effort */ });
+      }
+    }
     this.data[collection] = (this.data[collection] as AnyItem[]).filter((i) => i.id !== id) as never;
     this.version++;
     if (this.mode === 'demo') saveDemo(this.data);
@@ -272,20 +286,23 @@ export class PlaceStore {
   }
 
   // ---------- Phase 3: profiles + invitations ----------
-  async updateProfile(displayName: string): Promise<void> {
+  // Phase 11: avatar is an optional preset key. Only the whitelisted keys
+  // in ui.tsx are accepted; anything else falls back to the initial letter.
+  async updateProfile(displayName: string, avatar?: string): Promise<void> {
     const name = displayName.trim().slice(0, 100);
     if (!name) throw new Error('Please enter a display name.');
+    const avatarKey = ['bunny', 'fox', 'cat', 'hedgehog', 'frog', 'duck', 'flower', 'star'].includes(avatar ?? '') ? avatar : undefined;
     if (this.mode === 'api') {
-      const saved = await apiFetch('/api/auth/me', { method: 'PATCH', body: JSON.stringify({ displayName: name }) }) as { displayName: string };
+      const saved = await apiFetch('/api/auth/me', { method: 'PATCH', body: JSON.stringify({ displayName: name, avatar: avatarKey ?? null }) }) as { displayName: string; avatar?: string };
       this.viewerName = saved.displayName;
     } else if (this.mode === 'supabase' && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sign in first.');
-      const { error } = await supabase.from('profiles').upsert({ id: user.id, display_name: name, updated_at: new Date().toISOString() });
+      const { error } = await supabase.from('profiles').upsert({ id: user.id, display_name: name, avatar_path: avatarKey ?? null, updated_at: new Date().toISOString() });
       if (error) throw new Error(error.message);
       this.viewerName = name;
     }
-    this.data.members = this.data.members.map((m) => (m.id === this.viewerId ? { ...m, displayName: name, shortName: name } : m));
+    this.data.members = this.data.members.map((m) => (m.id === this.viewerId ? { ...m, displayName: name, shortName: name, avatar: avatarKey } : m));
     this.version++;
     if (this.mode === 'demo') saveDemo(this.data);
   }
@@ -349,15 +366,16 @@ export class PlaceStore {
     // 0004 creates a profile on sign-up; older accounts get one upserted
     // below). A partner's name is visible only because they share this
     // space — the profiles RLS policy allows exactly that, nothing more.
-    const { data: profileRows } = await supabase.from('profiles').select('id, display_name').in('id', memberRows.map((m) => m.user_id));
-    const profileById = new Map((profileRows || []).map((r) => [String(r.id), String(r.display_name || '')]));
-    if (!profileById.get(user.id)) {
+    const { data: profileRows } = await supabase.from('profiles').select('id, display_name, avatar_path').in('id', memberRows.map((m) => m.user_id));
+    const profileById = new Map((profileRows || []).map((r) => [String(r.id), { name: String(r.display_name || ''), avatar: r.avatar_path ? String(r.avatar_path) : undefined }]));
+    if (!profileById.get(user.id)?.name) {
       await supabase.from('profiles').upsert({ id: user.id, display_name: this.viewerName }).then(() => { /* best effort */ });
-      profileById.set(user.id, this.viewerName);
+      profileById.set(user.id, { name: this.viewerName, avatar: profileById.get(user.id)?.avatar });
     }
     const memberProfiles: Profile[] = memberRows.map((m) => {
-      const name = profileById.get(m.user_id) || (m.user_id === user.id ? 'You' : 'Partner');
-      return { id: m.user_id, displayName: name, shortName: m.user_id === user.id ? 'You' : name };
+      const p = profileById.get(m.user_id);
+      const name = p?.name || (m.user_id === user.id ? 'You' : 'Partner');
+      return { id: m.user_id, displayName: name, shortName: m.user_id === user.id ? 'You' : name, avatar: p?.avatar };
     });
     const signed = async (path: string | null) => {
       if (!path) return null;
@@ -502,7 +520,17 @@ export class PlaceStore {
     if (this.mode === 'supabase' && supabase) {
       const ext = file.name.split('.').pop()?.toLowerCase() || (kind === 'photo' ? 'jpg' : 'webm');
       const path = `${this.data.space.id}/${kind}/${uid()}.${ext}`;
-      const { error } = await supabase.storage.from('private-media').upload(path, file, { upsert: false });
+      // Store the content type derived from the whitelisted extension,
+      // NOT from File.type: a caller-supplied MIME type proves nothing
+      // about content, and the stored type is what a direct fetch would
+      // be served as. (The extension itself was already validated above,
+      // and the file signature was verified against it.)
+      const contentTypeByExt: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+        webp: 'image/webp', avif: 'image/avif',
+        mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', webm: 'audio/webm',
+      };
+      const { error } = await supabase.storage.from('private-media').upload(path, file, { upsert: false, contentType: contentTypeByExt[ext] });
       if (error) throw new Error(`Upload failed. ${error.message}`);
       const { data } = await supabase.storage.from('private-media').createSignedUrl(path, 60 * 60);
       return { path, url: data?.signedUrl ?? '' };

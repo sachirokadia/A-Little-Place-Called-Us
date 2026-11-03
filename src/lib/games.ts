@@ -1,6 +1,8 @@
 import type { PlaceStore } from './store';
 import type { BoardConfig } from './boardGame';
 import { DEFAULT_BOARD } from './boardGame';
+import type { DetectiveConfig } from './detective';
+import { DEFAULT_DETECTIVE } from './detective';
 import { supabase } from './supabase';
 import { apiFetch } from './api';
 
@@ -47,9 +49,23 @@ export interface HeroMission {
   rewardId: string | null;
 }
 
+/**
+ * Phase 15 — hero appearance. Lives inside the existing hero game-config
+ * JSON (game_configs, key 'hero'), so no table, column or migration is
+ * involved: an older saved hero config simply has no heroLook and the
+ * game falls back to the classic look. Palettes and accessories are
+ * original colour choices for the drawn figure, not any existing
+ * character's costume.
+ */
+export interface HeroLook {
+  palette: 'classic' | 'dusk' | 'forest' | 'night';
+  accessory: 'cape' | 'scarf' | 'hat' | 'none';
+}
+
 export interface HeroConfig {
   missions: HeroMission[];
   finalMessage: string;
+  heroLook?: HeroLook;
 }
 
 export interface GameConfigs {
@@ -58,6 +74,13 @@ export interface GameConfigs {
   memory: MemoryConfig;
   hero: HeroConfig;
   board: BoardConfig;
+  /** Phase 14 — detective cases live in the same game_configs JSON
+   *  path as every other game (one row per game_key, migration 0006
+   *  explicitly allows a new game_key with no schema change). Custom
+   *  cases are therefore shared with the partner by design, exactly
+   *  like quiz questions and chest riddles. No new table, endpoint
+   *  or migration was added for them. */
+  detective: DetectiveConfig;
 }
 
 export interface GameProgress {
@@ -120,6 +143,7 @@ export const DEFAULT_HERO: HeroConfig = {
     { id: 'h3', title: 'Starlight Bridge', district: 'Starlight Bridge', clue: 'Cross the bridge at the top of the city. The last token is near the far flag.', tokenGoal: 3, rewardMessage: 'The whole city, seen from above.', rewardKind: 'none', rewardId: null },
   ],
   finalMessage: 'You made it across the whole city — not because it was hard, but because you went together. That is the story this adventure was always telling.',
+  heroLook: { palette: 'classic', accessory: 'cape' },
 };
 
 export const DEFAULT_CONFIGS: GameConfigs = {
@@ -128,6 +152,7 @@ export const DEFAULT_CONFIGS: GameConfigs = {
   memory: { pairs: 6, source: 'patterns' },
   hero: DEFAULT_HERO,
   board: DEFAULT_BOARD,
+  detective: DEFAULT_DETECTIVE,
 };
 
 export function normaliseAnswer(s: string): string {
@@ -141,7 +166,7 @@ function loadDemo(): GameData {
       const parsed = JSON.parse(raw) as Partial<GameData>;
       if (parsed && parsed.configs) {
         return {
-          configs: { quiz: parsed.configs.quiz ?? DEFAULT_QUIZ, chest: parsed.configs.chest ?? DEFAULT_CHEST, memory: parsed.configs.memory ?? DEFAULT_CONFIGS.memory, hero: parsed.configs.hero ?? DEFAULT_HERO, board: parsed.configs.board ?? DEFAULT_BOARD },
+          configs: { quiz: parsed.configs.quiz ?? DEFAULT_QUIZ, chest: parsed.configs.chest ?? DEFAULT_CHEST, memory: parsed.configs.memory ?? DEFAULT_CONFIGS.memory, hero: parsed.configs.hero ?? DEFAULT_HERO, board: parsed.configs.board ?? DEFAULT_BOARD, detective: parsed.configs.detective ?? DEFAULT_DETECTIVE },
           progress: parsed.progress ?? [],
           rounds: parsed.rounds ?? [],
         };
@@ -165,7 +190,7 @@ export async function loadGameData(store: PlaceStore): Promise<GameData> {
   if (store.mode === 'api') {
     const data = await apiFetch('/api/games/data') as { configs: Partial<GameConfigs>; progress: GameProgress[]; rounds: GuessRound[] };
     return {
-      configs: { quiz: data.configs.quiz ?? DEFAULT_QUIZ, chest: data.configs.chest ?? DEFAULT_CHEST, memory: data.configs.memory ?? DEFAULT_CONFIGS.memory, hero: data.configs.hero ?? DEFAULT_HERO, board: data.configs.board ?? DEFAULT_BOARD },
+      configs: { quiz: data.configs.quiz ?? DEFAULT_QUIZ, chest: data.configs.chest ?? DEFAULT_CHEST, memory: data.configs.memory ?? DEFAULT_CONFIGS.memory, hero: data.configs.hero ?? DEFAULT_HERO, board: data.configs.board ?? DEFAULT_BOARD, detective: data.configs.detective ?? DEFAULT_DETECTIVE },
       progress: data.progress ?? [],
       rounds: data.rounds ?? [],
     };
@@ -177,13 +202,14 @@ export async function loadGameData(store: PlaceStore): Promise<GameData> {
     supabase.from('game_progress').select('*').eq('space_id', spaceId).order('updated_at', { ascending: false }),
     supabase.from('game_rounds_visible').select('*').eq('space_id', spaceId).order('created_at', { ascending: false }),
   ]);
-  const configs: GameConfigs = { ...DEFAULT_CONFIGS };
+  const configs: GameConfigs = { ...DEFAULT_CONFIGS, detective: DEFAULT_DETECTIVE };
   for (const row of (cfgRes.data || []) as { game_key: string; config: unknown }[]) {
     if (row.game_key === 'quiz') configs.quiz = row.config as QuizConfig;
     if (row.game_key === 'chest') configs.chest = row.config as ChestConfig;
     if (row.game_key === 'memory') configs.memory = row.config as MemoryConfig;
     if (row.game_key === 'hero') configs.hero = row.config as HeroConfig;
     if (row.game_key === 'board') configs.board = row.config as BoardConfig;
+    if (row.game_key === 'detective') configs.detective = row.config as DetectiveConfig;
   }
   const progress: GameProgress[] = ((progRes.data || []) as Record<string, unknown>[]).map((r) => ({
     id: String(r.id), gameKey: String(r.game_key), userId: String(r.user_id), userName: '',
@@ -204,7 +230,7 @@ export async function loadGameData(store: PlaceStore): Promise<GameData> {
   return { configs, progress, rounds };
 }
 
-export async function saveGameConfig(store: PlaceStore, key: keyof GameConfigs, config: QuizConfig | ChestConfig | MemoryConfig | HeroConfig | BoardConfig): Promise<void> {
+export async function saveGameConfig(store: PlaceStore, key: keyof GameConfigs, config: QuizConfig | ChestConfig | MemoryConfig | HeroConfig | BoardConfig | DetectiveConfig): Promise<void> {
   if (store.mode === 'demo') {
     const data = loadDemo();
     data.configs[key] = config as never;

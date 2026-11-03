@@ -10,7 +10,7 @@
  *
  * Original game, original terminology. It is inspired by the general
  * mechanics of classic property-trading games (roll, move, buy, rent,
- * event cards, bankruptcy) but uses no Monopoly branding, logo, board
+ * event cards, bankruptcy) but uses no branded board layout, logo,
  * artwork, card text or branded assets: currency is Memory Coins,
  * event cards are Plot Twists and Little Surprises, properties are
  * Places and Moments, and every name, rule and card here is written
@@ -50,6 +50,10 @@ export interface EventCard {
 }
 
 export interface BoardConfig {
+  /** Phase 15 — board name, inside the existing board game-config JSON.
+   *  Older saved configs have no name and the game falls back to
+   *  'Our Little World'. No table, column or migration is involved. */
+  name?: string;
   spaces: BoardSpace[];
   plotTwists: EventCard[];
   surprises: EventCard[];
@@ -119,7 +123,7 @@ function endTurn(state: BoardState): void {
   state.turn += 1;
 }
 
-function bankrupt(state: BoardState, playerIndex: number): void {
+function bankrupt(state: BoardState, playerIndex: number, gameName: string): void {
   const p = state.players[playerIndex];
   p.coins = 0;
   p.bankrupt = true;
@@ -129,18 +133,18 @@ function bankrupt(state: BoardState, playerIndex: number): void {
   const other = 1 - playerIndex;
   state.winner = state.players[other].bankrupt ? null : other;
   state.phase = 'gameover';
-  log(state, `${p.name} is out of Memory Coins and bankrupt. ${state.players[other].name} wins Our Little World.`);
+  log(state, `${p.name} is out of Memory Coins and bankrupt. ${state.players[other].name} wins ${gameName}.`);
 }
 
 /** Pay `amount` from `from` to the bank (to = -1) or to a player. Returns false if it bankrupts the payer. */
-function pay(state: BoardState, from: number, to: number, amount: number, reason: string): boolean {
+function pay(state: BoardState, from: number, to: number, amount: number, reason: string, gameName = BOARD_NAME_FALLBACK): boolean {
   const payer = state.players[from];
   if (amount <= 0) return true;
   if (payer.coins < amount) {
     const paid = payer.coins;
     if (to >= 0) state.players[to].coins += paid;
     log(state, `${payer.name} pays ${paid} Memory Coins for ${reason} and cannot pay the rest.`);
-    bankrupt(state, from);
+    bankrupt(state, from, gameName);
     return false;
   }
   payer.coins -= amount;
@@ -154,6 +158,12 @@ function categoryBonus(state: BoardState, config: BoardConfig, space: BoardSpace
   const siblings = config.spaces.filter((s) => s.kind === 'place' && s.category === space.category);
   if (siblings.length < 2) return false;
   const owner = state.owners[space.id];
+  // Phase 15 fix: an unowned place has no owner, and "nobody owns any
+  // place in the category" must not count as one owner owning them all
+  // (every undefined === undefined made the board display doubled rent
+  // for unowned places). Rent is only charged on owned places, so this
+  // changed displayed rents, not charged rent — but the display was wrong.
+  if (owner === undefined) return false;
   return siblings.every((s) => state.owners[s.id] === owner);
 }
 
@@ -165,7 +175,7 @@ export function rentFor(state: BoardState, config: BoardConfig, space: BoardSpac
 export function createBoardGame(config: BoardConfig, players: { name: string; token: string }[]): EngineResult {
   if (config.spaces.length < 8) return { ok: false, error: 'A board needs at least 8 spaces.' };
   if (config.startCoins <= 0) return { ok: false, error: 'Starting Memory Coins must be positive.' };
-  if (players.length !== 2) return { ok: false, error: 'Our Little World is a two-player game.' };
+  if (players.length !== 2) return { ok: false, error: `${boardName(config)} is a two-player game.` };
   if (!config.spaces.some((s) => s.kind === 'start')) return { ok: false, error: 'The board needs a Home Base start space.' };
   const state: BoardState = {
     players: players.map((p) => ({ name: p.name.trim() || 'Player', token: p.token, coins: config.startCoins, position: 0, skipTurns: 0, bankrupt: false })),
@@ -175,7 +185,7 @@ export function createBoardGame(config: BoardConfig, players: { name: string; to
     pendingSpaceId: null,
     pendingTrade: null,
     owners: {},
-    log: ['Our Little World begins. Both players start at Home Base.'],
+    log: [`${boardName(config)} begins. Both players start at Home Base.`],
     plotIndex: 0,
     surpriseIndex: 0,
     lastCard: null,
@@ -198,7 +208,7 @@ function resolveLanding(state: BoardState, config: BoardConfig): void {
       return;
     case 'tax': {
       const amount = space.amount ?? 0;
-      if (amount > 0 && !pay(state, state.current, -1, amount, space.name)) return;
+      if (amount > 0 && !pay(state, state.current, -1, amount, space.name, boardName(config))) return;
       endTurn(state);
       return;
     }
@@ -235,7 +245,7 @@ function resolveLanding(state: BoardState, config: BoardConfig): void {
       const rent = rentFor(state, config, space);
       if (rent > 0) {
         const other = state.players[owner];
-        if (!pay(state, state.current, owner, rent, `rent for ${space.name}${categoryBonus(state, config, space) ? ' (category bonus: rent doubled)' : ''}`)) return;
+        if (!pay(state, state.current, owner, rent, `rent for ${space.name}${categoryBonus(state, config, space) ? ' (category bonus: rent doubled)' : ''}`, boardName(config))) return;
         log(state, `${other.name} collects the rent.`);
       }
       endTurn(state);
@@ -252,17 +262,17 @@ function applyCard(state: BoardState, config: BoardConfig, card: EventCard): voi
     case 'coins': {
       const amount = card.amount ?? 0;
       if (amount >= 0) { player.coins += amount; log(state, `${player.name} collects ${amount} Memory Coins.`); }
-      else if (!pay(state, me, -1, -amount, card.title)) return;
+      else if (!pay(state, me, -1, -amount, card.title, boardName(config))) return;
       break;
     }
     case 'payPartner': {
       const amount = card.amount ?? 0;
-      if (!pay(state, me, other, amount, card.title)) return;
+      if (!pay(state, me, other, amount, card.title, boardName(config))) return;
       break;
     }
     case 'collectPartner': {
       const amount = card.amount ?? 0;
-      if (!pay(state, other, me, amount, card.title)) {
+      if (!pay(state, other, me, amount, card.title, boardName(config))) {
         // If the partner bankrupts paying, the game is over; do not end the turn again.
         return;
       }
@@ -439,30 +449,58 @@ export const DEFAULT_BOARD: BoardConfig = {
   ],
 };
 
-export const BOARD_RULES = `Our Little World — the rules, in full.
+export const BOARD_RULES = `Our Little World — the rules, in full, as implemented.
 
 Goal: be the last player holding Memory Coins. The other player going bankrupt ends the game, and the remaining player wins.
 
-Setup: both players start at Home Base with the same Memory Coins (default 1,000). Take turns rolling two dice and moving that many spaces around the board, in order.
+Setup: both players start at Home Base with the same Memory Coins (default 1,000). Take turns rolling two dice and moving that many spaces around the board, in order. There are 20 spaces on the default board.
 
-Passing Home Base: every time you pass Home Base (including by wrapping around the board), collect 200 Memory Coins. Landing exactly on Home Base collects nothing extra.
+Space types (the default board has exactly these):
+- Home Base (1): the start space. See 'Passing Home Base' below.
+- Places and Moments (11): buyable properties, grouped into categories (Everyday, Weekend, Dates, Dreams, Milestones). See below.
+- Plot Twist (2) and Little Surprise (2): draw the next card from that deck. See below.
+- Rainy Day Fund and Broken Umbrella (2 tax spaces): pay the stated amount to the bank (40 and 60 Memory Coins on the default board).
+- Picnic Spot (1 rest space): nothing happens, and that is the point.
+- Time-Out Corner (1): miss your next turn, then play normally.
 
-Places and Moments: landing on an unowned place lets you buy it for its price, or pass. Landing on a place owned by your partner means you pay its rent to them. Owning every place in a category doubles the rent on each place in that category. You cannot buy a place you cannot afford, and you cannot buy a place that is already owned.
+Passing Home Base: every time you pass Home Base, collect 200 Memory Coins. Landing exactly on Home Base after wrapping around the board also collects the 200 — wrapping counts as passing. (An earlier version of these rules said landing exactly on Home Base collected nothing extra; that was wrong, and the engine has always paid the bonus on a wrap.)
 
-Plot Twists and Little Surprises: draw the next card in that deck (decks cycle in order, they are not shuffled, so the game stays deterministic). Follow the card exactly: collect or pay Memory Coins, move, miss a turn, or move to a named space. A card that moves you does not trigger the landing effect of the space you arrive on.
+Places and Moments: landing on an unowned place lets you buy it for its price, or pass. Landing on a place you already own does nothing. Landing on a place owned by your partner means you pay its rent to them. Default prices run 60 to 260 Memory Coins and default rents 10 to 60. Owning every place in a category doubles the rent on each place in that category. You cannot buy a place you cannot afford — if you land on one you cannot afford, your turn simply ends — and you cannot buy a place that is already owned.
+
+Plot Twists and Little Surprises: draw the next card in that deck. Decks cycle in order, they are not shuffled, so the game stays deterministic. Follow the card exactly: collect or pay Memory Coins, pay your partner or collect from them, move to a named space, move forward a number of spaces, or miss a turn. A card that moves you does not trigger the landing effect of the space you arrive on. A card that moves you to Home Base from a later space collects the Home Base bonus; a card that moves you forward past Home Base collects it too. There are 6 Plot Twist cards and 6 Little Surprise cards on the default board.
 
 Rainy Day Fund and Broken Umbrella: pay the stated amount to the bank.
 
-Picnic Spot: rest. Nothing happens, and that is the point.
+Picnic Spot: rest. Nothing happens.
 
-Time-Out Corner: miss your next turn, then play normally.
+Time-Out Corner, and cards that make you miss a turn: on your next turn, roll (any dice) to spend the skipped turn — the roll is consumed and you do not move. Then you play normally.
 
-Trades: before rolling, the current player may offer one place they own to their partner for a price. The partner accepts (paying that price, if they can afford it) or declines. A trade does not use up your turn — you may still roll afterwards.
+Trades: before rolling, the current player may offer one place they own to their partner for a price (any whole number of Memory Coins, 0 or more). The partner accepts (paying that price, if they can afford it) or declines. A trade does not use up your turn — you may still roll afterwards. A trade can only be proposed before rolling, and only the other player may answer it.
 
-Bankruptcy: if you cannot pay rent, a tax, or a card payment in full, you pay what you have, return all your places to the bank, and go bankrupt. Your partner wins immediately.
+Bankruptcy: if you cannot pay rent, a tax, or a card payment in full, you pay what you have, return all your places to the bank (they become buyable again), and go bankrupt. Your partner wins immediately. A bankrupt player cannot roll.
 
 Ending early: either player may end the game early at any time; the player holding more Memory Coins wins, and equal coins is a draw. This is a house rule for a shorter game, and it is the only way to win without a bankruptcy.
 
-Turn order and fairness: only the current player may roll, buy, pass or propose a trade, and only the other player may answer a trade. The game refuses every other action, and the server (when you play through an account) re-checks each action against the saved game before applying it — it never accepts a balance or an ownership list sent by a device at face value.
+What if neither player can complete an action? There is no reachable stuck state in this engine, and no ambiguous case is left open: in the roll phase you can always roll; in the buy phase you can always buy or pass; in a trade phase the partner can always accept or decline; a skipped turn is always spent by rolling. If a game ever feels stuck, End game early is always available and settles it by coins (or a draw).
 
-Online multiplayer is NOT part of this release: this is a local two-player game on one device. If a future version adds it, it will need real-time synchronization and conflict handling, and it will be tested before it is claimed.`;
+Turn order and fairness: only the current player may roll, buy, pass or propose a trade, and only the other player may answer a trade. The game refuses every other action: rolling outside the roll phase, buying outside the buy phase, buying an already-owned place, a trade for a place you do not own, and dice outside 1–6 are all rejected with an error, and no state changes.
+
+How moves are checked, per mode:
+- API server mode: the device sends only an action (roll with two dice values, buy, pass, trade, trade answer, end early) plus the version it last saw. The server loads the saved game, re-runs the same engine from that saved state, and writes the new state with version + 1 only if the version still matches. A balance or ownership list sent by a device is never accepted, and a stale version is refused (409). This is the validated path. One limit even here: dice values come from the device and are only range-checked (1–6 each), so a fair roll cannot be proved server-side.
+- Signed-in database mode without the API server: the device runs the engine locally and writes only where the version still matches what it read, so a stale update writes nothing. But moves are NOT re-validated server-side: a space member with direct database access can submit one forged step (version advanced by exactly 1, config unchanged, finished games untouched) and it will be accepted. Board results in this mode are therefore NOT tamper-proof, and must never be presented as such.
+- Demo mode: the same engine plus a version check, in this browser's localStorage, on one device for both local players. Nothing here is validated by anyone else, and a second tab with an older copy is refused as stale rather than overwriting.
+
+Multiplayer, in plain words: this is turn-based shared state, not live multiplayer. In a signed-in space, both partners open the same saved game; one moves, the other presses 'Reload saved game' to see it. Moves do not appear live — refresh to see your partner's move. Either member may act for either player slot; turns are not tied to accounts. In demo mode the game lives on this device only and the partner must play on this device.
+
+Game history: every game keeps a move log (the last 50 entries; the screen shows the most recent 12). In signed-in modes each accepted move is also recorded in the moves table, but there is no completed-games list in the game screen — only the current or most recent game is shown. In demo mode there is no move history beyond the current game's log, and starting a new game replaces the saved one.
+
+Save and resume: the game is saved after every accepted action, including mid-decision (buy choice, trade answer) states, so reloading or reopening the game resumes exactly where it left off. Replay and reset: start a new game at any time from the intro or the playing screen; a finished game stays visible as 'the last game finished' until a new one is started.
+
+Customisation: the board name, every space name and description, every place price, rent and category, every tax amount, every card's title, text, effect and amount, the starting Memory Coins and the Home Base bonus are all editable in the board editor and apply to the next new game, never to a game already in progress (that game keeps its own snapshot). Player names and tokens are chosen per game. Spaces cannot be added, removed or re-typed in the editor, and there is no configurable win condition — bankruptcy and end-early are the fixed endings.`;
+
+export const BOARD_NAME_FALLBACK = 'Our Little World';
+
+export function boardName(config: BoardConfig): string {
+  const name = (config.name ?? '').trim();
+  return name || BOARD_NAME_FALLBACK;
+}

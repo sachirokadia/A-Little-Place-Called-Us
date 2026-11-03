@@ -1025,10 +1025,23 @@ mock auth — never the real project):**
   member-wide policies, as Phase 9 proved). Recovery, verified:
   re-apply 0007, 0008, 0009 in order — partner view back to 2 rows
   (private draft absent), partner update denied, outsider 0 rows.
+  CORRECTION (2026-11-03 remediation): that list is incomplete. A
+  0001 rerun also recreates the invoker (non-definer)
+  enforce_two_members trigger (undoing 0003) and recreates
+  is_space_member without a search_path (undoing 0010), so the full
+  recovery after a 0001 rerun is 0003 + 0007 + 0008 + 0009 + 0010
+  (0011/0012 are untouched by 0001 and harmless to re-apply).
+  Two further rerun hazards found in the same review: re-running
+  0004 after 0008 recreates the old shared-messages policy
+  alongside 0008's split policies, and permissive policies OR, so
+  the hijack fix is silently undone — re-apply 0008; re-running
+  0006 after 0009 recreates the unfiltered game_rounds_visible
+  view — re-apply 0008 + 0009.
 - 0008 rerun alone would undo column protection (its all-tables
   grant re-grants table-level SELECT), so if 0008 is ever re-run,
   re-apply 0009 immediately after it. General rule, unchanged from
-  Phase 9 and now extended: apply 0001–0009 once, in order; if any
+  Phase 9 and now extended: apply 0001–0012 once, in order (0002
+  superseded by 0004, never applied separately); if any
   earlier migration is re-run, re-apply all later migrations in
   order.
 

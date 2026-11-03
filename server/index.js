@@ -107,11 +107,11 @@ async function mySpace(userId) {
     [userId]);
   if (!r.rows[0]) return null;
   const members = await pool.query(
-    `SELECT u.id, u.display_name FROM users u JOIN space_members m ON m.user_id = u.id
+    `SELECT u.id, u.display_name, u.avatar_path FROM users u JOIN space_members m ON m.user_id = u.id
      WHERE m.space_id = $1 ORDER BY m.joined_at ASC`, [r.rows[0].id]);
   return {
     space: { id: r.rows[0].id, name: r.rows[0].name, inviteCode: r.rows[0].invite_code, createdAt: r.rows[0].created_at },
-    members: members.rows.map((m) => ({ id: m.id, displayName: m.display_name, shortName: m.id === userId ? 'You' : (m.display_name || 'Partner') })),
+    members: members.rows.map((m) => ({ id: m.id, displayName: m.display_name, shortName: m.id === userId ? 'You' : (m.display_name || 'Partner'), avatar: m.avatar_path || undefined })),
   };
 }
 function toIso(v) { return v ? new Date(v).toISOString() : null; }
@@ -214,22 +214,24 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.get('/api/auth/me', auth, async (req, res) => {
-  const r = await pool.query('SELECT id, email, display_name FROM users WHERE id = $1', [req.user.id]);
+  const r = await pool.query('SELECT id, email, display_name, avatar_path FROM users WHERE id = $1', [req.user.id]);
   if (!r.rows[0]) return res.status(401).json({ error: 'Account not found.' });
-  res.json({ id: r.rows[0].id, email: r.rows[0].email, displayName: r.rows[0].display_name });
+  res.json({ id: r.rows[0].id, email: r.rows[0].email, displayName: r.rows[0].display_name, avatar: r.rows[0].avatar_path || undefined });
 });
 
-// Phase 3 profile: a user may rename only themself. Avatar path is stored
-// on the user row for a later avatar UI; it is never set from a file path
+// Phase 3 profile: a user may rename only themself. Phase 11 avatar: the
+// stored value is a preset key from a fixed whitelist, never a file path
 // the client invents — uploads go through /api/upload, which namespaces
 // the path by space.
+const AVATAR_KEYS = ['bunny', 'fox', 'cat', 'hedgehog', 'frog', 'duck', 'flower', 'star'];
 app.patch('/api/auth/me', auth, async (req, res) => {
   const displayName = String(req.body.displayName || '').trim().slice(0, 100);
   if (!displayName) return res.status(400).json({ error: 'Please enter a display name.' });
+  const avatar = AVATAR_KEYS.includes(String(req.body.avatar || '')) ? String(req.body.avatar) : null;
   try {
-    const r = await pool.query('UPDATE users SET display_name = $1 WHERE id = $2 RETURNING id, email, display_name', [displayName, req.user.id]);
+    const r = await pool.query('UPDATE users SET display_name = $1, avatar_path = $2 WHERE id = $3 RETURNING id, email, display_name, avatar_path', [displayName, avatar, req.user.id]);
     if (!r.rows[0]) return res.status(401).json({ error: 'Account not found.' });
-    res.json({ id: r.rows[0].id, email: r.rows[0].email, displayName: r.rows[0].display_name });
+    res.json({ id: r.rows[0].id, email: r.rows[0].email, displayName: r.rows[0].display_name, avatar: r.rows[0].avatar_path || undefined });
   } catch (e) { return dbError(res, e); }
 });
 
@@ -426,6 +428,15 @@ app.delete('/api/items/:collection/:id', auth, async (req, res) => {
       return res.status(400).json({ error: 'Move it to Deleted first. Permanent deletion is only for already-deleted items.' });
     }
     await pool.query(`DELETE FROM ${def.table} WHERE id = $1`, [req.params.id]);
+    // Permanent deletion must also delete the stored file (same orphan
+    // gap as the Supabase purge path): unlink only paths that resolve
+    // inside UPLOAD_DIR, and never fail the purge for a missing file.
+    for (const mediaPath of [owned.row.media_path, owned.row.completion_photo_path]) {
+      if (!mediaPath) continue;
+      const resolved = path.resolve(path.join(UPLOAD_DIR, String(mediaPath)));
+      if (!resolved.startsWith(path.resolve(UPLOAD_DIR))) continue;
+      try { fs.unlinkSync(resolved); } catch { /* already gone */ }
+    }
     res.json({ ok: true });
   } catch (e) { return dbError(res, e); }
 });

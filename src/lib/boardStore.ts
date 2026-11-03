@@ -133,7 +133,18 @@ export async function applyBoardAction(store: PlaceStore, game: SavedBoardGame, 
     ...game, state: result.state, version: game.version + 1,
     status: result.state.phase === 'gameover' ? 'finished' : 'active',
   };
-  if (store.mode === 'demo') { saveDemo(next); return next; }
+  if (store.mode === 'demo') {
+    // Phase 15: demo mode previously wrote unconditionally, so two tabs
+    // holding the same version could both write and the second silently
+    // overwrote the first. Re-read first: if the stored game moved on
+    // (or was replaced by a new game), refuse as stale, exactly like
+    // the Supabase path below, and the UI reloads.
+    const current = loadDemo();
+    if (current && (current.id !== game.id || current.version !== game.version)) {
+      throw new Error('That game changed since you last saw it. Reload it and try again.');
+    }
+    saveDemo(next); return next;
+  }
   if (!supabase) throw new Error('Supabase is not configured.');
   const { data, error } = await supabase.from('board_games')
     .update({ state: next.state, version: next.version, status: next.status, updated_at: new Date().toISOString() })

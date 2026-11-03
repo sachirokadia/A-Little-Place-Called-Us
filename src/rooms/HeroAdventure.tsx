@@ -1,23 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlaceStore } from '../lib/store';
-import type { GameData, HeroConfig, HeroMission } from '../lib/games';
+import type { GameData, HeroConfig, HeroLook, HeroMission } from '../lib/games';
 import { DEFAULT_HERO, loadGameData, saveGameConfig, saveGameProgress } from '../lib/games';
+import { isSealed } from '../lib/utils';
 import { Card, Button, Field, inputCls } from '../components/ui';
+import { IntroMotif } from '../components/design-primitives';
 
 /**
- * Phase 6 — the personalized superhero adventure.
+ * Phase 6 — the personalized superhero adventure, Phase 15 hero picker.
  *
- * An original hero and an original city. No official Spider-Man maps,
+ * An original hero and an original city. No official franchise maps,
  * models, assets, logos, dialogue or music are used: the hero is a simple
- * red-and-blue figure drawn from rectangles and circles with no web
- * pattern and no logo, the city is three original districts drawn as
- * comic panels, and the "web" move is a zip to a glowing anchor point —
- * an original traversal effect, not a copied swing mechanic.
+ * figure drawn from rectangles and circles with no web pattern and no
+ * logo, the city is three original districts drawn as comic panels, and
+ * the "web" move is a zip to a glowing anchor point — an original
+ * traversal effect, not a copied swing mechanic.
  *
  * No large game engine is used: a single <canvas> with a small
  * requestAnimationFrame loop, plain AABB collision, and the same
  * game-config / game-progress tables Phase 5 introduced (game_key
  * 'hero'), so no new schema is needed.
+ *
+ * Phase 15: character selection and colours live in the same hero
+ * game-config JSON (heroLook: palette + accessory). An older saved
+ * config has no heroLook and falls back to the classic look, so nothing
+ * stored is invalidated. The picker offers only shared, unsealed items
+ * as rewards (see rewardLetters below): private drafts and sealed
+ * letters are never offered and never shown, even if an older saved
+ * mission names one.
  *
  * The final personal message is NEVER gated by gameplay: it is readable
  * from the intro and from the map, any time, without finishing a level.
@@ -94,8 +104,22 @@ function makeLevel(index: number): LevelDef {
 
 interface Player { x: number; y: number; vx: number; vy: number; onGround: boolean }
 
+/** Phase 15 — original colour choices for the drawn hero figure. */
+const HERO_PALETTES: Record<HeroLook['palette'], { label: string; body: string; accent: string }> = {
+  classic: { label: 'Classic red & blue', body: '#3E5A80', accent: '#B85A5A' },
+  dusk: { label: 'Dusk purple & gold', body: '#6B5B8F', accent: '#E8B84B' },
+  forest: { label: 'Forest green & peach', body: '#4E7A5A', accent: '#D98E73' },
+  night: { label: 'Night blue & sky', body: '#3A3F5A', accent: '#8FB8D8' },
+};
+const HERO_ACCESSORIES: Record<HeroLook['accessory'], string> = {
+  cape: 'Cape', scarf: 'Scarf', hat: 'Hat', none: 'No accessory',
+};
+const DEFAULT_LOOK: HeroLook = { palette: 'classic', accessory: 'cape' };
+
 export function HeroAdventure({ store, data, reload, notify, onBackToArcade }: Props) {
   const config: HeroConfig = data.configs.hero ?? DEFAULT_HERO;
+  const look: HeroLook = config.heroLook ?? DEFAULT_LOOK;
+  const [lookDraft, setLookDraft] = useState<HeroLook>(look);
   const missions = config.missions.length >= 3 ? config.missions.slice(0, 3) : [...config.missions, ...DEFAULT_HERO.missions.slice(config.missions.length)];
   const [screen, setScreen] = useState<'intro' | 'map' | 'playing' | 'levelDone' | 'allDone'>('intro');
   const [levelIndex, setLevelIndex] = useState(0);
@@ -352,44 +376,76 @@ export function HeroAdventure({ store, data, reload, notify, onBackToArcade }: P
         ctx.beginPath(); ctx.moveTo(p.x - cam - 20 - i * 6, y); ctx.lineTo(p.x - cam - 4, y); ctx.stroke();
       }
     }
-    // Player: original red-and-blue hero, no web pattern, no logo.
+    // Player: original hero figure, no web pattern, no logo. Colours
+    // and accessory come from the saved hero look (Phase 15 picker).
+    const palette = HERO_PALETTES[look.palette] ?? HERO_PALETTES.classic;
     const px = p.x - cam, py = p.y;
-    // Cape (flutters with movement)
-    ctx.fillStyle = '#B85A5A';
-    const flutter = p.vx !== 0 ? 6 : 2;
-    ctx.beginPath(); ctx.moveTo(px + 4, py + 6); ctx.lineTo(px - 10 - flutter, py + 22); ctx.lineTo(px + 4, py + 30); ctx.closePath(); ctx.fill();
+    // Cape (flutters with movement) — only for the cape accessory.
+    if (look.accessory === 'cape') {
+      ctx.fillStyle = palette.accent;
+      const flutter = p.vx !== 0 ? 6 : 2;
+      ctx.beginPath(); ctx.moveTo(px + 4, py + 6); ctx.lineTo(px - 10 - flutter, py + 22); ctx.lineTo(px + 4, py + 30); ctx.closePath(); ctx.fill();
+    }
     // Body
-    ctx.fillStyle = '#3E5A80';
+    ctx.fillStyle = palette.body;
     ctx.fillRect(px, py + 8, 28, 20);
+    // Scarf: a band across the body with a short tail.
+    if (look.accessory === 'scarf') {
+      ctx.fillStyle = palette.accent;
+      ctx.fillRect(px, py + 10, 28, 6);
+      ctx.fillRect(px + 28, py + 12, 10, 5);
+    }
     // Head + simple mask band
     ctx.fillStyle = '#E8C9A8';
     ctx.beginPath(); ctx.arc(px + 14, py + 4, 9, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#B85A5A';
+    ctx.fillStyle = palette.accent;
     ctx.fillRect(px + 5, py + 1, 18, 5);
+    // Hat: a simple cap above the head, no cape with it.
+    if (look.accessory === 'hat') {
+      ctx.fillStyle = palette.accent;
+      ctx.beginPath(); ctx.arc(px + 14, py - 1, 9, Math.PI, 0); ctx.fill();
+      ctx.fillRect(px + 14, py - 4, 12, 3);
+    }
     // Legs
     ctx.fillStyle = '#51443D';
     ctx.fillRect(px + 3, py + 28, 9, 8); ctx.fillRect(px + 16, py + 28, 9, 8);
   };
 
+  // Phase 15 privacy fix: reward letters are shared, unsealed letters
+  // only. The old picker used store.shared(), which only filters out
+  // deleted items — a private draft or an unrevealed scheduled letter
+  // could be picked and its body shown to the partner on completion.
+  const rewardLetters = store.visibleLetters().filter((l) => l.visibility === 'shared' && !isSealed(l, store.viewerId));
+
   const rewardItem = () => {
     if (!mission || mission.rewardKind === 'none' || !mission.rewardId) return null;
     if (mission.rewardKind === 'memory') return store.shared(store.data.memories).find((m) => m.id === mission.rewardId);
-    if (mission.rewardKind === 'letter') return store.shared(store.data.letters).find((l) => l.id === mission.rewardId);
+    if (mission.rewardKind === 'letter') return rewardLetters.find((l) => l.id === mission.rewardId);
     return store.shared(store.data.appreciations).find((a) => a.id === mission.rewardId);
   };
   const reward = rewardItem();
 
   const saveEdits = async () => {
     try {
-      await saveGameConfig(store, 'hero', { missions: editMissions, finalMessage: editFinal });
+      await saveGameConfig(store, 'hero', { missions: editMissions, finalMessage: editFinal, heroLook: look });
       await reload(); setEditing(false); notify('Adventure missions saved.');
     } catch (e) { notify(e instanceof Error ? e.message : 'Could not save missions.', 'error'); }
   };
 
+  const saveLook = async () => {
+    try {
+      await saveGameConfig(store, 'hero', { missions: config.missions, finalMessage: config.finalMessage, heroLook: lookDraft });
+      await reload(); notify('Hero look saved.');
+    } catch (e) { notify(e instanceof Error ? e.message : 'Could not save the hero look.', 'error'); }
+  };
+
+  const lookPreviewPalette = HERO_PALETTES[lookDraft.palette] ?? HERO_PALETTES.classic;
+
   return (
     <div>
       {screen === 'intro' && (
-        <Card>
+        <Card className="hero-panel">
+          <IntroMotif world="hero" />
           <p className="text-3xl" aria-hidden="true">▣</p>
           <h2 className="font-serif-display mt-2 text-2xl">A Hero's City</h2>
           <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">
@@ -400,7 +456,33 @@ export function HeroAdventure({ store, data, reload, notify, onBackToArcade }: P
           <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">
             Controls: <strong>← →</strong> or <strong>A D</strong> to run, <strong>Space / ↑ / W</strong> to jump, <strong>E</strong> to zip to a glowing anchor, <strong>P</strong> to pause.
             On a phone, use the buttons under the city. Falling just returns you to the last checkpoint, tokens kept.
+            Checkpoints restart you mid-level; a finished district is saved when you reach its flag, and the map remembers it after a reload.
           </p>
+          <div className="mt-4 rounded-2xl border border-cocoa/20 bg-paper p-4">
+            <p className="font-serif-display text-lg">Choose your hero</p>
+            <p className="mt-1 text-sm text-cocoa-soft">Original colours and accessories for the drawn figure — saved with this adventure's settings, and changeable any time. No new character is added; this is the same hero, recoloured.</p>
+            <div className="mt-3 flex items-center gap-3">
+              <svg width="60" height="60" viewBox="0 0 60 60" role="img" aria-label={`Hero preview: ${HERO_PALETTES[lookDraft.palette]?.label}, ${HERO_ACCESSORIES[lookDraft.accessory]}`}>
+                {lookDraft.accessory === 'cape' && <path d="M18 14 L4 30 L18 38 Z" fill={lookPreviewPalette.accent} />}
+                <rect x="16" y="22" width="28" height="20" fill={lookPreviewPalette.body} />
+                {lookDraft.accessory === 'scarf' && <><rect x="16" y="24" width="28" height="6" fill={lookPreviewPalette.accent} /><rect x="44" y="26" width="10" height="5" fill={lookPreviewPalette.accent} /></>}
+                <circle cx="30" cy="14" r="9" fill="#E8C9A8" />
+                <rect x="21" y="11" width="18" height="5" fill={lookPreviewPalette.accent} />
+                {lookDraft.accessory === 'hat' && <><path d="M21 8 A9 9 0 0 1 39 8 Z" fill={lookPreviewPalette.accent} /><rect x="30" y="5" width="12" height="3" fill={lookPreviewPalette.accent} /></>}
+                <rect x="19" y="42" width="9" height="8" fill="#51443D" /><rect x="32" y="42" width="9" height="8" fill="#51443D" />
+              </svg>
+              <div className="flex-1 space-y-2">
+                <Field label="Hero colours"><select value={lookDraft.palette} onChange={(e) => setLookDraft({ ...lookDraft, palette: e.target.value as HeroLook['palette'] })} className={inputCls} aria-label="Hero colours">
+                  {(Object.keys(HERO_PALETTES) as HeroLook['palette'][]).map((p) => <option key={p} value={p}>{HERO_PALETTES[p].label}</option>)}
+                </select></Field>
+                <Field label="Accessory"><select value={lookDraft.accessory} onChange={(e) => setLookDraft({ ...lookDraft, accessory: e.target.value as HeroLook['accessory'] })} className={inputCls} aria-label="Hero accessory">
+                  {(Object.keys(HERO_ACCESSORIES) as HeroLook['accessory'][]).map((a) => <option key={a} value={a}>{HERO_ACCESSORIES[a]}</option>)}
+                </select></Field>
+              </div>
+            </div>
+            <div className="mt-3"><Button variant="quiet" onClick={saveLook}>Save hero look</Button></div>
+            <p className="mt-2 text-xs text-cocoa-soft">Saved look: {HERO_PALETTES[look.palette]?.label}, {HERO_ACCESSORIES[look.accessory]}.</p>
+          </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button onClick={() => setScreen('map')}>Start the adventure</Button>
             <Button variant="quiet" onClick={() => setShowFinal(!showFinal)}>{showFinal ? 'Hide the final message' : 'Read the final message now'}</Button>
@@ -416,9 +498,10 @@ export function HeroAdventure({ store, data, reload, notify, onBackToArcade }: P
 
       {screen === 'map' && (
         <div>
-          <Card>
+          <Card className="hero-map">
             <h2 className="font-serif-display text-2xl">Choose a district</h2>
             <p className="mt-1 text-sm text-cocoa-soft">Three short districts. Finish them in any order — the map remembers which ones you have done.</p>
+            <p className="mt-1 text-sm text-cocoa-soft">Playing as: {HERO_PALETTES[look.palette]?.label}, {HERO_ACCESSORIES[look.accessory]} (change it on the intro screen).</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {missions.map((m, i) => {
                 const done = completed.has(m.id);
@@ -446,7 +529,7 @@ export function HeroAdventure({ store, data, reload, notify, onBackToArcade }: P
           {editing && (
             <Card className="mt-4">
               <h3 className="font-serif-display text-xl">Make it yours</h3>
-              <p className="mt-1 text-sm text-cocoa-soft">Edit titles, clues, token goals and reward messages. The three districts keep their rooftops — only the story around them changes. These are starter missions — replace them with your own places and memories. Nothing here is your real history until you write it.</p>
+              <p className="mt-1 text-sm text-cocoa-soft">Edit titles, clues, token goals and reward messages. The three districts keep their rooftops — only the story around them changes. These are starter missions — replace them with your own places and memories. Nothing here is your real history until you write it. Reward items are shared items only: private drafts and sealed letters are never offered, and a reward chosen here is shown to whoever finishes the district, so pick only what you mean to share.</p>
               <div className="mt-4 space-y-4">
                 {editMissions.map((m, i) => (
                   <div key={m.id} className="space-y-3 rounded-2xl border border-cocoa/15 p-3">
@@ -460,7 +543,7 @@ export function HeroAdventure({ store, data, reload, notify, onBackToArcade }: P
                       <Field label="Reward item"><select value={m.rewardId ?? ''} onChange={(e) => { const next = [...editMissions]; next[i] = { ...m, rewardId: e.target.value || null }; setEditMissions(next); }} className={inputCls}>
                         <option value="">No item yet</option>
                         {m.rewardKind === 'memory' && store.shared(store.data.memories).map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
-                        {m.rewardKind === 'letter' && store.shared(store.data.letters).map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+                        {m.rewardKind === 'letter' && rewardLetters.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
                         {m.rewardKind === 'appreciation' && store.shared(store.data.appreciations).map((x) => <option key={x.id} value={x.id}>{x.text.slice(0, 60)}</option>)}
                       </select></Field>
                     )}

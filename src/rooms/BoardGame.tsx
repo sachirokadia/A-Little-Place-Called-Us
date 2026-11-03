@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { PlaceStore } from '../lib/store';
 import type { GameData } from '../lib/games';
-import { DEFAULT_BOARD, BOARD_RULES, rentFor } from '../lib/boardGame';
+import { DEFAULT_BOARD, BOARD_RULES, rentFor, boardName } from '../lib/boardGame';
 import type { BoardConfig, BoardSpace, EventCard } from '../lib/boardGame';
 import type { SavedBoardGame, BoardAction } from '../lib/boardStore';
 import { loadBoardGame, createBoardGameSaved, applyBoardAction } from '../lib/boardStore';
 import { saveGameConfig } from '../lib/games';
 import { Card, Button, Field, inputCls, ConfirmDelete } from '../components/ui';
+import { IntroMotif } from '../components/design-primitives';
 
 type Props = {
   store: PlaceStore;
@@ -20,16 +21,18 @@ type Props = {
  * Phase 7 — "Our Little World", a complete original property-trading
  * board game for two local players on one device.
  *
- * No Monopoly branding, logo, board artwork, card text or branded
+ * No branded board layout, logo, artwork, card text or branded
  * assets are used: currency is Memory Coins, cards are Plot Twists and
  * Little Surprises, properties are Places and Moments, and every name
  * and rule here is written for this game.
  *
  * The engine (src/lib/boardGame.ts) is pure and deterministic; this
- * component only renders it and sends actions. Online multiplayer is
- * NOT claimed: both players play on this device, in turn, and the
- * saved game is one row with a version, so a stale update is refused
- * rather than silently overwriting a newer one.
+ * component only renders it and sends actions. Live multiplayer is
+ * NOT claimed: the saved game is one row with a version, so a stale
+ * update is refused rather than silently overwriting a newer one, and
+ * the other partner sees a move only after reloading — see the
+ * multiplayer note on the intro and playing screens, which states
+ * this per mode in plain words.
  */
 
 // Perimeter positions for a 20-space board on a 6x6 grid, clockwise
@@ -72,7 +75,7 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
     try {
       const next = await applyBoardAction(store, game, action);
       setGame(next);
-      if (next.state.phase === 'gameover') notify(next.state.draw ? 'The game ends in a draw.' : `${next.state.players[next.state.winner ?? 0].name} wins Our Little World.`);
+      if (next.state.phase === 'gameover') notify(next.state.draw ? 'The game ends in a draw.' : `${next.state.players[next.state.winner ?? 0].name} wins ${boardName(game.config)}.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'That move could not be saved.';
       notify(msg, 'error');
@@ -113,6 +116,13 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
   const state = game?.state ?? null;
   const currentPlayer = state ? state.players[state.current] : null;
   const pendingSpace: BoardSpace | undefined = state?.pendingSpaceId ? game?.config.spaces.find((s) => s.id === state.pendingSpaceId) : undefined;
+  // Phase 15 — the multiplayer mode, stated in plain words, per mode.
+  // Demo: device-local only. Signed-in modes: one shared saved game
+  // row per space, read by both partners, with no live updates.
+  const multiplayerNote = store.mode === 'demo'
+    ? 'Demo mode: this game lives on this device only. Both players take turns here, on this device — there is no shared or live game in demo mode.'
+    : 'Shared board, take turns, refresh to see your partner’s move: both partners open the same saved game in this space. Moves do not appear live — press “Reload saved game” to see your partner’s move. Either member may act for either player slot; turns are not tied to accounts.';
+  const boardTitle = boardName(sharedConfig);
 
   const updateSpace = (idx: number, patch: Partial<BoardSpace>) => {
     const spaces = [...editConfig.spaces];
@@ -128,17 +138,17 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
   return (
     <div>
       {screen === 'intro' && (
-        <Card>
+        <Card className="board-table">
+          <IntroMotif world="board" />
           <p className="text-3xl" aria-hidden="true">▦</p>
-          <h2 className="font-serif-display mt-2 text-2xl">Our Little World</h2>
+          <h2 className="font-serif-display mt-2 text-2xl">{boardTitle}</h2>
           <p className="mt-2 text-sm leading-relaxed text-cocoa-soft">
             A property-trading board game about your places, memories, inside jokes, dream destinations and future plans.
-            Two players, one device, taking turns. Currency is Memory Coins; event cards are Plot Twists and Little Surprises;
-            properties are Places and Moments. Nothing here uses Monopoly branding, artwork or card text.
+            Two players, taking turns. Currency is Memory Coins; event cards are Plot Twists and Little Surprises;
+            properties are Places and Moments. All art, names and card text here are original.
           </p>
-          <p className="mt-2 text-sm text-cocoa-soft">
-            <strong>Local two-player only in this release.</strong> Online multiplayer is not claimed: it would need
-            real-time synchronization and conflict handling, and it has not been built or tested here.
+          <p className="mt-2 rounded-2xl border border-cocoa/25 bg-paper p-3 text-sm leading-relaxed" role="note">
+            <strong>How the two of you play:</strong> {multiplayerNote}
           </p>
           {game && state && state.phase !== 'gameover' && (
             <p className="mt-3 rounded-2xl bg-butter p-3 text-sm">
@@ -179,9 +189,9 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
               <Field label="Player 2 token"><select value={p2.token} onChange={(e) => setP2({ ...p2, token: e.target.value })} className={inputCls}>{TOKENS.map((t) => <option key={t} value={t}>{t}</option>)}</select></Field>
             </div>
           </div>
-          <p className="mt-3 text-xs text-cocoa-soft">Board: {sharedConfig.spaces.length} spaces, {sharedConfig.startCoins} starting Memory Coins, {sharedConfig.passStartBonus} for passing Home Base. Edit the board from the intro screen to change it.</p>
+          <p className="mt-3 text-xs text-cocoa-soft">Board: {boardTitle} · {sharedConfig.spaces.length} spaces, {sharedConfig.startCoins} starting Memory Coins, {sharedConfig.passStartBonus} for passing Home Base. Edit the board from the intro screen to change it.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button onClick={startGame} disabled={busy}>{busy ? 'Starting…' : 'Begin Our Little World'}</Button>
+            <Button onClick={startGame} disabled={busy}>{busy ? 'Starting…' : `Begin ${boardTitle}`}</Button>
             <Button variant="quiet" onClick={() => setScreen('intro')}>Back</Button>
           </div>
         </Card>
@@ -191,13 +201,16 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
         <div>
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-serif-display text-2xl">Our Little World</h2>
+              <h2 className="font-serif-display text-2xl">{game ? boardName(game.config) : boardTitle}</h2>
               <span className="flex flex-wrap gap-2">
                 <Button variant="quiet" onClick={refreshGame}>Reload saved game</Button>
                 <Button variant="quiet" onClick={() => setScreen('setup')}>New game</Button>
                 <Button variant="quiet" onClick={onBackToArcade}>Back to the arcade</Button>
               </span>
             </div>
+            <p className="mt-2 rounded-2xl border border-cocoa/25 bg-paper p-3 text-sm leading-relaxed" role="note">
+              <strong>How the two of you play:</strong> {multiplayerNote}
+            </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {state.players.map((pl, i) => (
                 <div key={i} className={`rounded-2xl border p-3 ${i === state.current && state.phase !== 'gameover' ? 'border-cocoa/60 bg-butter' : 'border-cocoa/20 bg-paper'}`}>
@@ -208,9 +221,15 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
               ))}
             </div>
             {state.phase === 'gameover' && (
-              <p className="font-serif-display mt-4 text-2xl" role="status">
-                {state.draw ? 'It is a draw — both players hold the same Memory Coins.' : `${state.players[state.winner ?? 0].name} wins Our Little World!`}
-              </p>
+              <div>
+                <p className="font-serif-display mt-4 text-2xl" role="status">
+                  {state.draw ? 'It is a draw — both players hold the same Memory Coins.' : `${state.players[state.winner ?? 0].name} wins ${game ? boardName(game.config) : boardTitle}!`}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button onClick={() => setScreen('setup')}>Play again — start a new game</Button>
+                  <Button variant="quiet" onClick={() => setScreen('intro')}>Back to intro</Button>
+                </div>
+              </div>
             )}
             {state.phase !== 'gameover' && currentPlayer && (
               <p className="mt-3 text-sm" aria-live="polite">
@@ -229,7 +248,7 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
           </Card>
 
           <Card className="mt-4">
-            <div className="grid grid-cols-6 gap-1.5" role="grid" aria-label="Our Little World board">
+            <div className="grid grid-cols-6 gap-1.5" role="grid" aria-label={`${game ? boardName(game.config) : boardTitle} board`}>
               {game.config.spaces.map((space, idx) => {
                 const pos = boardPosition(idx);
                 const owner = state.owners[space.id];
@@ -247,7 +266,7 @@ export function BoardGame({ store, data, reload, notify, onBackToArcade }: Props
                 );
               })}
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-cocoa/30 bg-cream p-2 text-center" style={{ gridRow: '2 / 6', gridColumn: '2 / 6' }}>
-                <p className="font-serif-display text-xl">Our Little World</p>
+                <p className="font-serif-display text-xl">{game ? boardName(game.config) : boardTitle}</p>
                 <p className="mt-1 text-xs leading-relaxed text-cocoa-soft">Memory Coins · Plot Twists · Little Surprises<br />{game.config.spaces.length} spaces · {state.turn + 1} turns played</p>
                 {state.dice && <p className="mt-2 text-3xl" aria-hidden="true">{state.dice[0]} + {state.dice[1]}</p>}
               </div>
@@ -321,7 +340,10 @@ function BoardEditor({ editConfig, setEditConfig, updateSpace, updateCard, onSav
     <div className="mt-4 space-y-4 rounded-2xl border border-cocoa/20 bg-paper p-4">
       <h3 className="font-serif-display text-xl">Edit the board (shared configuration)</h3>
       <p className="text-sm text-cocoa-soft">Both partners read this same configuration. Changes apply to the next new game, never to a game already in progress (that game keeps its own snapshot).</p>
-      <p className="text-sm leading-relaxed text-cocoa-soft">These are starter places — rename them to your real places, memories, inside jokes, and dream destinations. Nothing here is your real history until you write it.</p>
+      <p className="text-sm leading-relaxed text-cocoa-soft">These are starter places — rename them to your real places, memories, inside jokes, and dream destinations. Nothing here is your real history until you write it. Spaces cannot be added, removed or re-typed here, and the endings (bankruptcy, end early) are fixed — those need a board-layout change, not an editor field.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Board name"><input value={editConfig.name ?? ''} placeholder="Our Little World" onChange={(e) => setEditConfig({ ...editConfig, name: e.target.value })} className={inputCls} maxLength={60} /></Field>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Starting Memory Coins"><input type="number" min={1} value={editConfig.startCoins} onChange={(e) => setEditConfig({ ...editConfig, startCoins: Number(e.target.value) })} className={inputCls} /></Field>
         <Field label="Home Base bonus"><input type="number" min={0} value={editConfig.passStartBonus} onChange={(e) => setEditConfig({ ...editConfig, passStartBonus: Number(e.target.value) })} className={inputCls} /></Field>
