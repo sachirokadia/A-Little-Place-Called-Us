@@ -62,7 +62,22 @@ export default function App() {
   const [authForm, setAuthForm] = useState({ email: '', password: '' });
   const [spaceForm, setSpaceForm] = useState({ name: 'A Little Place Called Us', invite: '' });
   const [cottageTheme, setCottageTheme] = useState<'day' | 'night'>('day');
-  const [reduceMotionPref, setReduceMotionPref] = useState(false);
+  /* Reduced motion: read the stored preference at BOOT (state
+     initialiser), not only when Settings renders — previously the
+     state started false and was only re-read on landing in Settings,
+     so a fresh load with the preference stored still animated until
+     Settings was visited. The index.html boot script adds the same
+     class to <html> before first paint; this effect keeps <html> in
+     sync with the toggle afterwards. */
+  const [reduceMotionPref, setReduceMotionPref] = useState(() => {
+    try { return localStorage.getItem('our-place-reduce-motion') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try {
+      if (reduceMotionPref) document.documentElement.classList.add('reduce-motion');
+      else document.documentElement.classList.remove('reduce-motion');
+    } catch { /* private mode */ }
+  }, [reduceMotionPref]);
   /* Phase 17 preferences (all device-local; see lib/preferences.ts).
      Text size applies to <html> on boot and on change; high contrast
      is a class on the root div below. */
@@ -106,7 +121,7 @@ export default function App() {
      top (fullscreen, scroll-locked). Values are bare numbers in
      sessionStorage — no content, nothing private. A saved position
      past a shortened page clamps to the new maximum, gracefully. */
-  const isWorldRoom = (r: RoomId) => r === 'memories' || r === 'letters' || r === 'quiet' || r === 'appreciations' || r === 'future' || r === 'reminders' || r === 'keepsakes';
+  const isWorldRoom = (r: RoomId) => r === 'memories' || r === 'letters' || r === 'quiet' || r === 'appreciations' || r === 'future' || r === 'reminders' || r === 'keepsakes' || r === 'search';
   const saveWindowScroll = (r: RoomId) => { try { sessionStorage.setItem(`our-place-scroll-window-${r}`, String(window.scrollY)); } catch { /* private mode */ } };
   const restoreWindowScroll = (r: RoomId) => {
     if (r === 'home' || isWorldRoom(r)) { window.scrollTo({ top: 0 }); return; }
@@ -332,7 +347,7 @@ export default function App() {
      gets onSwitchViewer below). Every other route keeps its chrome.
      Phase 12B extends the same shell, unchanged, to Appreciations,
      Future and Reminders. */
-  const isRoomWorld = room === 'memories' || room === 'letters' || room === 'quiet' || room === 'appreciations' || room === 'future' || room === 'reminders' || room === 'keepsakes';
+  const isRoomWorld = room === 'memories' || room === 'letters' || room === 'quiet' || room === 'appreciations' || room === 'future' || room === 'reminders' || room === 'keepsakes' || room === 'search';
 
   /* Space setup, shared by both presentations below: the same create /
      join form, rendered as a normal card on other routes and as a small
@@ -366,7 +381,7 @@ export default function App() {
       {store.mode === 'demo' && !isCottageHome && !isRoomWorld && (
         <div role="status" className="bg-butter px-4 py-2 text-center text-xs leading-relaxed text-cocoa ring-1 ring-inset ring-cocoa/20">
           Demo mode — sample content, saved on this device only. Connect Supabase (see README) to sync privately across devices. You are viewing as <strong>{viewerLabel}</strong>.
-          <button className="ml-2 underline" onClick={switchViewer}>Switch to {store.viewerId === 'demo-you' ? 'Partner' : 'You'}</button>
+          <button className="ml-2 inline-flex min-h-11 items-center px-1 underline" onClick={switchViewer}>Switch to {store.viewerId === 'demo-you' ? 'Partner' : 'You'}</button>
         </div>
       )}
 
@@ -403,7 +418,7 @@ export default function App() {
       {room === 'future' && <FutureRoom {...roomProps} onSwitchViewer={switchViewer} viewerLabel={viewerLabel} otherViewerLabel={store.viewerId === 'demo-you' ? 'Partner' : 'You'} />}
       {room === 'arcade' && <ArcadeRoom {...roomProps} />}
       {room === 'keepsakes' && <KeepsakesRoom {...roomProps} onSwitchViewer={switchViewer} viewerLabel={viewerLabel} otherViewerLabel={store.viewerId === 'demo-you' ? 'Partner' : 'You'} />}
-      {room === 'search' && <SearchRoom {...roomProps} go={go} />}
+      {room === 'search' && <SearchRoom {...roomProps} go={go} onSwitchViewer={switchViewer} viewerLabel={viewerLabel} otherViewerLabel={store.viewerId === 'demo-you' ? 'Partner' : 'You'} />}
       {room === 'deleted' && <DeletedRoom {...roomProps} />}
       {room === 'settings' && (
         <Page identity="settings" title="Settings" subtitle="Your place, your rules. Nothing here is shared beyond your two-member space.">

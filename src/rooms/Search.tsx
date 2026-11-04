@@ -14,7 +14,16 @@
  *
  * Recent searches: device-local only (our-place-search-recent-v1),
  * stored on submit, capped at 8, one-tap clear, labelled as device-
- * only — because a query itself can contain private words. */
+ * only — because a query itself can contain private words.
+ *
+ * STORYBOOK WORLDS (continuation): Search is now a real world, not
+ * a tinted Page — the full-screen RoomWorld shell (own background,
+ * own header, own enter animation, own scroll container, footer
+ * return), a drawer-cabinet environment built from CSS and generic
+ * room-name drawer fronts (aria-hidden, never content), and the
+ * search form itself sitting in a pulled-out drawer panel. The
+ * previous plain-page version is what the "partial world" verdict
+ * referred to; this replaces it, with no search behaviour changed. */
 
 import { useEffect, useMemo, useState } from 'react';
 import type { PlaceStore } from '../lib/store';
@@ -22,15 +31,16 @@ import { loadGameData } from '../lib/games';
 import { searchAll, SEARCH_TYPE_LABEL, type SearchType } from '../lib/search';
 import { feedAuthorLabel } from '../lib/activity';
 import { clearRecentSearches, pushRecentSearch, readRecentSearches } from '../lib/preferences';
-import { Page, Button, Card, inputCls } from '../components/ui';
+import { Button, Card, inputCls } from '../components/ui';
 import { RoomEmpty } from '../components/design-primitives';
+import { RoomWorld } from '../components/RoomWorld';
 import type { RoomId } from '../lib/types';
 
-type Props = { store: PlaceStore; refresh: () => void; notify: (m: string, k?: 'ok' | 'error') => void; go: (r: RoomId) => void };
+type Props = { store: PlaceStore; refresh: () => void; notify: (m: string, k?: 'ok' | 'error') => void; go: (r: RoomId) => void; onSwitchViewer?: () => void; viewerLabel?: string; otherViewerLabel?: string };
 
 const TYPES: SearchType[] = ['memory', 'letter', 'appreciation', 'plan', 'reminder', 'keepsake'];
 
-export function SearchRoom({ store, go }: Props) {
+export function SearchRoom({ store, go, onSwitchViewer, viewerLabel = 'You', otherViewerLabel = 'Partner' }: Props) {
   const [q, setQ] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [typeFilter, setTypeFilter] = useState<SearchType | 'all'>('all');
@@ -56,35 +66,46 @@ export function SearchRoom({ store, go }: Props) {
   const members = store.data.members;
 
   return (
-    <Page identity="search" title="Find something we kept" intro="Open the drawer and look for what you kept — only shared things are ever in here." homeLabel="⌂ Back to our cottage" homeAriaLabel="Back to our cottage" subtitle="One search across the shared things in your home — memories, letters, notes, plans and keepsakes. Journals are never searched, private drafts never appear, and sealed or scheduled letters never appear, not even by title. Results open their room; there is no per-item deep view to fake.">
-      <form onSubmit={(e) => { e.preventDefault(); submit(q); }} className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <label className="flex-1"><span className="sr-only">Search your shared home</span>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search titles, words, notes, plans…" className={inputCls} aria-label="Search your shared home" />
-        </label>
-        <Button type="submit">Search</Button>
-        {submitted && <Button variant="quiet" onClick={clearAll}>Clear search</Button>}
-      </form>
+    <RoomWorld room="search" title="Find something we kept" handNote="the drawer cabinet — every drawer labelled, nothing hidden away"
+      intro="Open the drawer and look for what you kept — only shared things are ever in here."
+      subtitle="One search across the shared things in your home — memories, letters, notes, plans and keepsakes. Journals are never searched, private drafts never appear, and sealed or scheduled letters never appear, not even by title. Results open their room; there is no per-item deep view to fake."
+      decor={<div className="search-drawer-fronts" aria-hidden="true">
+        <span className="search-drawer-front"><i />Memories</span>
+        <span className="search-drawer-front"><i />Letters</span>
+        <span className="search-drawer-front"><i />Plans</span>
+      </div>}
+      isDemo={store.mode === 'demo'} viewerLabel={viewerLabel} otherViewerLabel={otherViewerLabel} onSwitchViewer={onSwitchViewer}>
+      <section className="search-drawer" aria-label="Search drawer">
+        <span className="search-drawer-handle" aria-hidden="true" />
+        <form onSubmit={(e) => { e.preventDefault(); submit(q); }} className="mb-4 flex flex-col gap-2 sm:flex-row">
+          <label className="flex-1"><span className="sr-only">Search your shared home</span>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search titles, words, notes, plans…" className={inputCls} aria-label="Search your shared home" />
+          </label>
+          <Button type="submit">Search</Button>
+          {submitted && <Button variant="quiet" onClick={clearAll}>Clear search</Button>}
+        </form>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter results by type">
-        <span className="text-sm font-bold text-cocoa">Type:</span>
-        <button type="button" onClick={() => setTypeFilter('all')} aria-pressed={typeFilter === 'all'} className={`min-h-11 rounded-full px-4 py-2 text-sm ${typeFilter === 'all' ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>All types</button>
-        {TYPES.map((t) => (
-          <button key={t} type="button" onClick={() => setTypeFilter(t)} aria-pressed={typeFilter === t} className={`min-h-11 rounded-full px-4 py-2 text-sm ${typeFilter === t ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>{SEARCH_TYPE_LABEL[t]}</button>
-        ))}
-      </div>
-      {members.length > 1 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter results by author">
-          <span className="text-sm font-bold text-cocoa">From:</span>
-          <button type="button" onClick={() => setAuthorFilter('all')} aria-pressed={authorFilter === 'all'} className={`min-h-11 rounded-full px-4 py-2 text-sm ${authorFilter === 'all' ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>Both of you</button>
-          {members.map((m) => (
-            <button key={m.id} type="button" onClick={() => setAuthorFilter(m.id)} aria-pressed={authorFilter === m.id} className={`min-h-11 rounded-full px-4 py-2 text-sm ${authorFilter === m.id ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>{feedAuthorLabel(store, m.id, m.displayName)}</button>
+        <div className="mb-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter results by type">
+          <span className="text-sm font-bold text-cocoa">Type:</span>
+          <button type="button" onClick={() => setTypeFilter('all')} aria-pressed={typeFilter === 'all'} className={`min-h-11 rounded-full px-4 py-2 text-sm ${typeFilter === 'all' ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>All types</button>
+          {TYPES.map((t) => (
+            <button key={t} type="button" onClick={() => setTypeFilter(t)} aria-pressed={typeFilter === t} className={`min-h-11 rounded-full px-4 py-2 text-sm ${typeFilter === t ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>{SEARCH_TYPE_LABEL[t]}</button>
           ))}
-          <span className="text-xs text-cocoa-soft">Author is matched by member, not by the stored name — a renamed member still filters correctly. Keepsakes carry no author, so choosing an author hides keepsake results rather than guessing one.</span>
         </div>
-      )}
+        {members.length > 1 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter results by author">
+            <span className="text-sm font-bold text-cocoa">From:</span>
+            <button type="button" onClick={() => setAuthorFilter('all')} aria-pressed={authorFilter === 'all'} className={`min-h-11 rounded-full px-4 py-2 text-sm ${authorFilter === 'all' ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>Both of you</button>
+            {members.map((m) => (
+              <button key={m.id} type="button" onClick={() => setAuthorFilter(m.id)} aria-pressed={authorFilter === m.id} className={`min-h-11 rounded-full px-4 py-2 text-sm ${authorFilter === m.id ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>{feedAuthorLabel(store, m.id, m.displayName)}</button>
+            ))}
+            <span className="text-xs text-cocoa-soft">Author is matched by member, not by the stored name — a renamed member still filters correctly. Keepsakes carry no author, so choosing an author hides keepsake results rather than guessing one.</span>
+          </div>
+        )}
+      </section>
 
       {!submitted ? (
-        <div className="space-y-4">
+        <div className="mt-4 space-y-4">
           <RoomEmpty room="search" title="What are you looking for?" body="Type a word above and press Search — a name, a place, a phrase from a letter you shared, a plan you made. Private journals and drafts are never searched, so they can never turn up here, for either of you." />
           {recent.length > 0 && (
             <Card>
@@ -100,9 +121,9 @@ export function SearchRoom({ store, go }: Props) {
           )}
         </div>
       ) : results.length === 0 ? (
-        <RoomEmpty room="search" title="Nothing kept matches that" body={`No shared memory, letter, note, plan, reminder or keepsake matches “${submitted}”${typeFilter !== 'all' ? ` as a ${SEARCH_TYPE_LABEL[typeFilter].toLowerCase()}` : ''}. Private drafts, journals and sealed letters are never searched, so they never appear here even if the words match. Try a different word, or clear the filters.`} action={<Button onClick={clearAll}>Clear search and filters</Button>} />
+        <div className="mt-4"><RoomEmpty room="search" title="Nothing kept matches that" body={`No shared memory, letter, note, plan, reminder or keepsake matches “${submitted}”${typeFilter !== 'all' ? ` as a ${SEARCH_TYPE_LABEL[typeFilter].toLowerCase()}` : ''}. Private drafts, journals and sealed letters are never searched, so they never appear here even if the words match. Try a different word, or clear the filters.`} action={<Button onClick={clearAll}>Clear search and filters</Button>} /></div>
       ) : (
-        <div>
+        <div className="mt-4">
           <p role="status" className="mb-3 text-sm text-cocoa-soft" data-testid="search-count">{results.length} result{results.length === 1 ? '' : 's'} for “{submitted}”.</p>
           <ul className="grid gap-3">
             {results.map((r) => (
@@ -120,6 +141,6 @@ export function SearchRoom({ store, go }: Props) {
         </div>
       )}
       <p className="mt-6 text-xs leading-relaxed text-cocoa-soft">Search honesty note: this search opens rooms, not individual items — there is no per-item deep view in the app to open into, so “Open in …” takes you to the room that holds it. Sealed letters are excluded from search entirely, which is stricter than the Letters room (where a sealed envelope is visible): a search must never confirm a sealed letter even exists.</p>
-    </Page>
+    </RoomWorld>
   );
 }

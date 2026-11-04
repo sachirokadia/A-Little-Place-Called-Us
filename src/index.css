@@ -455,6 +455,7 @@ body {
 .room-world-future { background: linear-gradient(to bottom, #dfeaf3 0, #e3ebdd 420px, #f8f1e7 1100px); }
 .room-world-reminders { background: linear-gradient(to bottom, #f8edc9 0, #f4dfe3 420px, #f8f1e7 1100px); }
 .room-world-keepsakes { background: linear-gradient(to bottom, #f8edc9 0, #eae1f1 420px, #f8f1e7 1100px); }
+.room-world-search { background: linear-gradient(to bottom, #dfeaf3 0, #f8f1e7 420px, #eae1f1 1100px); }
 .room-world-header { position: sticky; top: 0; z-index: 30; border-bottom: 1.5px solid rgba(81, 68, 61, 0.25); }
 .room-world-header-memories { background: #f8f1e7; }
 .room-world-header-letters { background: #f1e6d3; }
@@ -463,6 +464,7 @@ body {
 .room-world-header-future { background: #dfeaf3; }
 .room-world-header-reminders { background: #f8edc9; }
 .room-world-header-keepsakes { background: #f8edc9; }
+.room-world-header-search { background: #dfeaf3; }
 /* Phase 13 — arcade pixel road: one thin decorative row, CSS only,
    no animation, no layout width change to the cabinets below. */
 .pixel-road { display: flex; gap: 6px; justify-content: center; margin: 2px 0 10px; font-size: 14px; line-height: 1; color: #6b5563; }
@@ -589,6 +591,7 @@ body {
 .world-enter-appreciations { animation: worldEnterSettle 480ms ease both; }
 .world-enter-keepsakes { animation: worldEnterSettle 450ms ease both; }
 .world-enter-reminders { animation: worldEnterSoftRise 450ms ease both; }
+.world-enter-search { animation: worldEnterSettle 480ms ease both; }
 .world-exiting { animation: worldExitFade 180ms ease both; }
 .room-world-intro, .page-intro { font-family: "Caveat", cursive; font-size: 1.6rem; line-height: 1.25; color: #6b5563; margin-top: 6px; }
 .room-world-footer { margin-top: 32px; padding-top: 20px; border-top: 2px dashed rgba(81, 68, 61, 0.3); display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
@@ -605,6 +608,35 @@ body {
    button runs the existing random-note flow; nothing new is stored. */
 .kind-jar { background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px rgba(81, 68, 61, 0.10); }
 .keepsake-box-strip { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 4px 0 12px; font-size: 14px; font-weight: 700; color: #6b5563; }
+/* Search drawer world: the drawer cabinet. The fronts row is the
+   cabinet face (three labelled drawers, aria-hidden glyphs only —
+   the labels are room names, never content); the search form sits
+   in a pulled-out drawer panel with a handle bar, and each result
+   is a drawer card. The world background above (powder fading to
+   cream and lilac) is the desk the cabinet stands on, not a tint
+   applied to the old page: the room now uses the full-screen
+   RoomWorld shell, its own header, its own enter animation, its
+   own scroll container and its own footer return, like the other
+   worlds. */
+.search-drawer-fronts { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 4px 0 16px; }
+.search-drawer-front { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 92px; padding: 10px 12px 12px; background: #dfeaf3; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 8px; box-shadow: 0 6px 14px rgba(81, 68, 61, 0.12); font-size: 12px; font-weight: 800; color: #51443d; }
+.search-drawer-front i { font-style: normal; width: 34px; height: 8px; border-radius: 9999px; border: 1.5px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
+.search-drawer { position: relative; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.35); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px rgba(81, 68, 61, 0.10); overflow: hidden; }
+.search-drawer::before { content: ""; display: block; height: 10px; margin: -16px -16px 14px; background: #dfeaf3; border-bottom: 1.5px solid rgba(81, 68, 61, 0.35); }
+.search-drawer-handle { display: block; width: 64px; height: 10px; margin: 0 auto 14px; border-radius: 9999px; border: 1.5px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
+/* Keepsake Box scene: a fuller box, not a strip. The lid bar (with
+   latch) sits over an interior panel that holds the real summary
+   and the real category compartments — counts and filters derived
+   from the existing keepsakes, nothing invented, nothing stored. */
+.keepsake-box-scene { background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.35); border-radius: 20px; box-shadow: 0 10px 24px rgba(81, 68, 61, 0.10); overflow: hidden; margin-bottom: 16px; }
+.keepsake-box-lid { display: flex; align-items: center; justify-content: center; gap: 10px; background: #d8c6ee; border-bottom: 1.5px solid rgba(81, 68, 61, 0.45); padding: 10px 14px; font-size: 14px; font-weight: 800; color: #51443d; }
+.keepsake-box-lid i { font-style: normal; width: 44px; height: 10px; border-radius: 9999px; border: 1.5px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
+.keepsake-box-interior { padding: 16px; }
+/* Drawer motif for the Search identity strip: a small labelled
+   drawer front with a pull handle, matching the keepsake-box motif
+   language (border, shadow, pastel face). */
+.motif-drawer { width: 58px; height: 46px; flex-shrink: 0; background: #dfeaf3; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: var(--shadow-chip); position: relative; }
+.motif-drawer::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: 22px; height: 5px; margin-left: -11px; border-radius: 9999px; border: 1px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
 /* Memories ambient sway + world-enter reduced-motion kill-switches,
    in addition to the global * rule above (which already collapses
    durations). The .reduce-motion class mirrors the Settings toggle. */

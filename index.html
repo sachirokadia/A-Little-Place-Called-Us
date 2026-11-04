@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f8f1e7" />
     <meta name="description" content="A little place called us — a quiet, private shared home for two people. Memories, letters, encouragement, and plans, kept in one place." />
+    <script>
+      /* Boot reduced-motion: apply the stored preference BEFORE first
+         paint, so a fresh load landing directly on Home never flashes
+         a full animation. Stored key only (our-place-reduce-motion);
+         the system preference is already honoured by the CSS media
+         query. React re-syncs this class from the same key on mount
+         and on toggle, so the toggle can still remove it. */
+      try {
+        if (localStorage.getItem('our-place-reduce-motion') === '1') {
+          document.documentElement.classList.add('reduce-motion');
+        }
+      } catch (e) { /* private mode: no stored preference */ }
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />

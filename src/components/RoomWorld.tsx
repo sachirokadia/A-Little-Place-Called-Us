@@ -56,7 +56,7 @@ import { attemptLeave } from '../lib/dirtyGuard';
    clamps to the new maximum — a graceful landing, never a faked one.
    Game states are not restored by this mechanism (see report). */
 
-export type WorldRoom = 'memories' | 'letters' | 'quiet' | 'appreciations' | 'future' | 'reminders' | 'keepsakes';
+export type WorldRoom = 'memories' | 'letters' | 'quiet' | 'appreciations' | 'future' | 'reminders' | 'keepsakes' | 'search';
 
 function scrollKey(room: WorldRoom) {
   return `our-place-scroll-world-${room}`;

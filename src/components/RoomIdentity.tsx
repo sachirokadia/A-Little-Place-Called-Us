@@ -91,6 +91,13 @@ export function RoomIdentity({ room }: { room: RoomId }) {
       {room === 'keepsakes' && (
         <span className="motif-keepsake mb-2">▢</span>
       )}
+      {room === 'search' && (
+        <>
+          <span className="motif-drawer">✉</span>
+          <span className="motif-drawer">❦</span>
+          <span className="motif-drawer">⌖</span>
+        </>
+      )}
       {note[room] && <span className="font-hand mb-1 text-2xl leading-none text-plum">{note[room]}</span>}
     </div>
   );

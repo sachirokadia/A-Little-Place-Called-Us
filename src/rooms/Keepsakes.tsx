@@ -48,21 +48,25 @@ export function KeepsakesRoom({ store, refresh, notify, onSwitchViewer, viewerLa
     <RoomWorld room="keepsakes" title="Keepsake Box" handNote="only what you chose to keep — nothing auto-added"
       intro="Lift the lid only when you want to — everything inside was chosen, on purpose, to be kept."
       subtitle="Everything here was explicitly favourited, completed, or both. Un-favouriting an item in its own room removes it from this box. Private drafts, sealed or scheduled letters, journals and voice notes never enter this box."
-      decor={<p className="keepsake-box-strip" aria-hidden="true"><span>▢</span><span>kept with care</span><span>▢</span></p>}
       isDemo={store.mode === 'demo'} viewerLabel={viewerLabel} otherViewerLabel={otherViewerLabel} onSwitchViewer={onSwitchViewer}>
-      <p className="mb-4 text-sm text-cocoa-soft" data-testid="keepsake-count">
-        {keepsakes.length === 0 ? 'Nothing kept yet.' : `${keepsakes.length} keepsake${keepsakes.length === 1 ? '' : 's'} kept.`} Viewing as {viewerLabel} — the partner sees only shared keepsakes and their own, never your private items.
-      </p>
-      <p className="mb-4 text-xs leading-relaxed text-cocoa-soft">Dates below are the item&apos;s own date (memory date, letter/note date, or completion date) — the model stores no “saved on” date for a favourite, so no saved date is shown or invented. Games have no item date.</p>
-      {keepsakes.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter keepsakes by category">
-          <span className="text-sm font-bold text-cocoa">Category:</span>
-          <button type="button" onClick={() => setCategoryFilter('all')} aria-pressed={categoryFilter === 'all'} className={`min-h-11 rounded-full px-4 py-2 text-sm ${categoryFilter === 'all' ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>All ({keepsakes.length})</button>
-          {categories.map((c) => (
-            <button key={c} type="button" onClick={() => setCategoryFilter(c)} aria-pressed={categoryFilter === c} className={`min-h-11 rounded-full px-4 py-2 text-sm ${categoryFilter === c ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>{c} ({keepsakes.filter((k) => k.category === c).length})</button>
-          ))}
+      <section className="keepsake-box-scene" aria-label="Keepsake Box">
+        <div className="keepsake-box-lid" aria-hidden="true"><span>▢</span><span>kept with care</span><i /><span>▢</span></div>
+        <div className="keepsake-box-interior">
+          <p className="text-sm text-cocoa-soft" data-testid="keepsake-count">
+            {keepsakes.length === 0 ? 'Nothing kept yet.' : `${keepsakes.length} keepsake${keepsakes.length === 1 ? '' : 's'} kept.`} Viewing as {viewerLabel} — the partner sees only shared keepsakes and their own, never your private items.
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-cocoa-soft">Dates below are the item&apos;s own date (memory date, letter/note date, or completion date) — the model stores no “saved on” date for a favourite, so no saved date is shown or invented. Games have no item date.</p>
+          {keepsakes.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Filter keepsakes by category">
+              <span className="text-sm font-bold text-cocoa">Compartments:</span>
+              <button type="button" onClick={() => setCategoryFilter('all')} aria-pressed={categoryFilter === 'all'} className={`min-h-11 rounded-full px-4 py-2 text-sm ${categoryFilter === 'all' ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>All ({keepsakes.length})</button>
+              {categories.map((c) => (
+                <button key={c} type="button" onClick={() => setCategoryFilter(c)} aria-pressed={categoryFilter === c} className={`min-h-11 rounded-full px-4 py-2 text-sm ${categoryFilter === c ? 'bg-cocoa text-cream' : 'border border-cocoa/25 bg-paper text-cocoa'}`}>{c} ({keepsakes.filter((k) => k.category === c).length})</button>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </section>
       {keepsakes.length > 0 && filtered.length === 0 && (
         <p className="mb-4 text-sm text-cocoa-soft">Nothing in this category — choose another category above.</p>
       )}

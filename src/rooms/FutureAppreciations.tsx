@@ -293,36 +293,13 @@ export function FutureRoom({ store, refresh, notify, onSwitchViewer, viewerLabel
     <RoomWorld room="future" title="Our Future" handNote="the adventure map — little islands, winding paths, pins where we mean to go"
       intro="Unfold the map — every island is a plan waiting for its day, and every path is one you can choose."
       subtitle="Bucket lists, date ideas, and plans — with a clear done state, and an optional photo only after you actually do it. Tap a marker on the map to open its plan."
-      actions={<Button variant="quiet" onClick={() => setStatusFilter(statusFilter === 'done' ? 'all' : 'done')}>{statusFilter === 'done' ? 'Show all stops' : 'Show visited stops'}</Button>}
+      actions={<><Button variant="quiet" onClick={() => setStatusFilter(statusFilter === 'done' ? 'all' : 'done')}>{statusFilter === 'done' ? 'Show all stops' : 'Show visited stops'}</Button><Button variant="quiet" onClick={() => document.getElementById('future-create')?.scrollIntoView({ block: 'start' })}>Add a new stop</Button></>}
       decor={<p className="pressed-flowers" aria-hidden="true"><span>⌖</span><span>⚑</span><span>✦</span><span>⌖</span><span>⚑</span></p>}
       isDemo={store.mode === 'demo'} viewerLabel={viewerLabel} otherViewerLabel={otherViewerLabel} onSwitchViewer={onSwitchViewer}>
-      <CreateEntry room="future" note="a new stop on the map">
-      <Card className="mb-5">
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="What shall we do?"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} maxLength={200} placeholder="e.g. Cook a meal together, no phones" /></Field>
-          <Field label="Kind"><select value={category} onChange={(e) => setCategory(e.target.value as typeof category)} className={inputCls}><option value="date">Date idea</option><option value="bucket">Bucket list</option><option value="plan">Plan</option></select></Field>
-        </div>
-        <div className="mt-3"><Field label="Details (optional)"><textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={2} className={inputCls} maxLength={2000} placeholder="Where, when, what to bring…" /></Field></div>
-        <div className="mt-3"><Field label="Target date (optional)" hint="A hope, not a deadline — leave it blank if there is no date in mind yet."><input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={inputCls} /></Field></div>
-        <div className="mt-3"><Button onClick={save} disabled={saving}>{saving ? 'Adding…' : 'Add to Our Future'}</Button></div>
-      </Card>
-      </CreateEntry>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {(['all', 'planned', 'done'] as const).map((s) => <button key={s} onClick={() => setStatusFilter(s)} aria-pressed={statusFilter === s} className={`min-h-11 rounded-full px-4 py-2 text-sm ${statusFilter === s ? 'bg-gold text-night-900' : 'border border-cocoa/25 text-ivory'}`}>{s === 'all' ? 'All' : s === 'planned' ? 'Still to do' : 'Done'}</button>)}
-        {(['all', 'bucket', 'date', 'plan'] as const).map((c) => <button key={c} onClick={() => setCatFilter(c)} aria-pressed={catFilter === c} className={`min-h-11 rounded-full px-4 py-2 text-sm ${catFilter === c ? 'bg-gold text-night-900' : 'border border-cocoa/25 text-ivory'}`}>{c === 'all' ? 'Every kind' : c === 'bucket' ? 'Bucket list' : c === 'date' ? 'Date ideas' : 'Plans'}</button>)}
-      </div>
 
-      <p className="mb-4 text-sm text-ivory-dim">{mapCounts.planned} destination{mapCounts.planned === 1 ? '' : 's'} still to visit · {mapCounts.done} already visited{mapCounts.done ? ' — flagged on the map below' : ''}. Ordered by target date, undated plans at the end of the trail.</p>
-      <p className="future-legend">Map key: ⌖ trail stop — still to do · ⚑ flag — visited and collected</p>
 
-      {upcoming && (
-        <section aria-label="Up next" className="upcoming-strip mb-4">
-          <p className="text-xs uppercase tracking-widest text-cocoa-soft">Up next on the map</p>
-          <button type="button" onClick={() => setSelected(upcoming.id)} className="mt-1 text-left"><span className="font-serif-display text-xl leading-snug">{upcoming.title}</span>{upcoming.targetDate && <span className="ml-2 text-sm text-cocoa-soft">hoped for {formatDate(upcoming.targetDate)} — a hope, not a deadline</span>}</button>
-          <p className="mt-1 text-sm text-cocoa-soft">Tap it to open the plan. No date in mind yet? Undated plans wait at the end of the trail.</p>
-        </section>
-      )}
+
 
       {items.length > 0 && (
         <section aria-label="Adventure map" className="map-scene mb-5">
@@ -338,6 +315,22 @@ export function FutureRoom({ store, refresh, notify, onSwitchViewer, viewerLabel
           <p className="mt-3 text-xs text-cocoa-soft">Our Little World board-game spaces are fixed — plans do not become board locations. That link does not exist in the board engine, so none is shown here.</p>
         </section>
       )}
+
+      {upcoming && (
+        <section aria-label="Up next" className="upcoming-strip mb-4">
+          <p className="text-xs uppercase tracking-widest text-cocoa-soft">Up next on the map</p>
+          <button type="button" onClick={() => setSelected(upcoming.id)} className="mt-1 text-left"><span className="font-serif-display text-xl leading-snug">{upcoming.title}</span>{upcoming.targetDate && <span className="ml-2 text-sm text-cocoa-soft">hoped for {formatDate(upcoming.targetDate)} — a hope, not a deadline</span>}</button>
+          <p className="mt-1 text-sm text-cocoa-soft">Tap it to open the plan. No date in mind yet? Undated plans wait at the end of the trail.</p>
+        </section>
+      )}
+
+      <p className="mb-4 text-sm text-ivory-dim">{mapCounts.planned} destination{mapCounts.planned === 1 ? '' : 's'} still to visit · {mapCounts.done} already visited{mapCounts.done ? ' — flagged on the map above' : ''}. Ordered by target date, undated plans at the end of the trail.</p>
+      <p className="future-legend">Map key: ⌖ trail stop — still to do · ⚑ flag — visited and collected</p>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(['all', 'planned', 'done'] as const).map((s) => <button key={s} onClick={() => setStatusFilter(s)} aria-pressed={statusFilter === s} className={`min-h-11 rounded-full px-4 py-2 text-sm ${statusFilter === s ? 'bg-gold text-night-900' : 'border border-cocoa/25 text-ivory'}`}>{s === 'all' ? 'All' : s === 'planned' ? 'Still to do' : 'Done'}</button>)}
+        {(['all', 'bucket', 'date', 'plan'] as const).map((c) => <button key={c} onClick={() => setCatFilter(c)} aria-pressed={catFilter === c} className={`min-h-11 rounded-full px-4 py-2 text-sm ${catFilter === c ? 'bg-gold text-night-900' : 'border border-cocoa/25 text-ivory'}`}>{c === 'all' ? 'Every kind' : c === 'bucket' ? 'Bucket list' : c === 'date' ? 'Date ideas' : 'Plans'}</button>)}
+      </div>
 
       {items.length === 0 ? <RoomEmpty room="future" title="Nothing planned yet" body="Add something small first. A future does not have to start grand — it just has to start." /> : (
         <div className="map-trail">
@@ -391,6 +384,22 @@ export function FutureRoom({ store, refresh, notify, onSwitchViewer, viewerLabel
         </ul>
         </div>
       )}
+
+
+      <section id="future-create" aria-label="Add a new stop" className="mt-6">
+        <h2 className="font-serif-display mb-3 text-2xl">Add a new stop to the map</h2>
+      <CreateEntry room="future" note="a new stop on the map">
+      <Card className="mb-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="What shall we do?"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} maxLength={200} placeholder="e.g. Cook a meal together, no phones" /></Field>
+          <Field label="Kind"><select value={category} onChange={(e) => setCategory(e.target.value as typeof category)} className={inputCls}><option value="date">Date idea</option><option value="bucket">Bucket list</option><option value="plan">Plan</option></select></Field>
+        </div>
+        <div className="mt-3"><Field label="Details (optional)"><textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={2} className={inputCls} maxLength={2000} placeholder="Where, when, what to bring…" /></Field></div>
+        <div className="mt-3"><Field label="Target date (optional)" hint="A hope, not a deadline — leave it blank if there is no date in mind yet."><input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={inputCls} /></Field></div>
+        <div className="mt-3"><Button onClick={save} disabled={saving}>{saving ? 'Adding…' : 'Add to Our Future'}</Button></div>
+      </Card>
+      </CreateEntry>
+      </section>
 
       {selectedPlan && <Modal title={selectedPlan.title} onClose={() => setSelected(null)}>
         <p className="text-xs uppercase tracking-widest text-blue-soft">{selectedPlan.category === 'bucket' ? 'Bucket list' : selectedPlan.category === 'date' ? 'Date idea' : 'Plan'} · {selectedPlan.status === 'done' ? 'Done ✓' : 'Planned'}</p>

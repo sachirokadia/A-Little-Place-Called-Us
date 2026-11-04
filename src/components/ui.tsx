@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import type { RoomId } from '../lib/types';
 import { RoomIdentity } from './RoomIdentity';
@@ -90,7 +90,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-export const inputCls = 'w-full rounded-note border border-cocoa/25 bg-paper px-3 py-2.5 text-sm text-cocoa placeholder:text-cocoa/40 focus:border-plum focus:outline-none';
+export const inputCls = 'min-h-11 w-full rounded-note border border-cocoa/25 bg-paper px-3 py-2.5 text-sm text-cocoa placeholder:text-cocoa/40 focus:border-plum focus:outline-none';
 
 export function Toast({ message, kind }: { message: string; kind: 'ok' | 'error' }) {
   if (!message) return null;
@@ -115,17 +115,61 @@ export function ConfirmDelete({ onConfirm, label = 'Delete', note, confirmLabel 
 }
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  /* Generic focus trap + Escape, for every dialog in the app (the
+     Write-a-letter dialog, letter/memory viewers, plan viewer, note
+     viewer, random-note dialog). On open, focus moves to the first
+     focusable control inside (the Close button); Tab / Shift+Tab
+     cycle inside the dialog and never reach the page behind it;
+     Escape runs the same onClose as the Close button and backdrop
+     (so a guarded onClose, e.g. unsaved letter text, still asks
+     first via the dirty guard instead of discarding silently);
+     on unmount, focus returns to whatever held it before the dialog
+     opened. The door menu and Introduction keep their own Escape
+     handling — they are not Modals and are untouched here. */
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const focusables = (): HTMLElement[] => {
+      if (!dialog) return [];
+      const nodes = dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      return [...nodes].filter((el) => el.offsetParent !== null || el === document.activeElement);
+    };
+    const first = focusables()[0];
+    if (first) first.focus();
+    else dialog?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current(); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) { e.preventDefault(); return; }
+      const current = document.activeElement as HTMLElement | null;
+      const idx = items.indexOf(current as HTMLElement);
+      if (e.shiftKey) {
+        if (idx <= 0) { e.preventDefault(); items[items.length - 1].focus(); }
+      } else if (idx === items.length - 1) {
+        e.preventDefault(); items[0].focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (previouslyFocused && document.contains(previouslyFocused)) previouslyFocused.focus();
+    };
+  }, []);
   return (
     <AnimatePresence>
       <motion.div className="fixed inset-0 z-40 flex items-end justify-center bg-cocoa/50 p-0 sm:items-center sm:p-6"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} role="presentation">
-        <motion.div role="dialog" aria-modal="true" aria-label={title}
+        <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
           className="paper-card max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-card p-5 sm:rounded-card"
           initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}>
           <div className="mb-4 flex items-start justify-between gap-3">
             <h2 className="font-serif-display text-2xl text-cocoa">{title}</h2>
-            <button onClick={onClose} aria-label="Close" className="rounded-full border border-cocoa/25 px-3 py-1 text-sm font-bold">Close</button>
+            <button onClick={onClose} aria-label="Close" className="min-h-11 rounded-full border border-cocoa/25 px-4 py-2 text-sm font-bold">Close</button>
           </div>
           {children}
         </motion.div>
