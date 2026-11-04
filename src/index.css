@@ -1,0 +1,646 @@
+@import "tailwindcss";
+
+/* Phase 1 fonts, self-hosted in public/fonts/ so they load reliably
+   without depending on an external font service at runtime. */
+@font-face { font-family: 'DM Serif Display'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/DMSerifDisplay.woff2') format('woff2'); }
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('/fonts/DMSans.woff2') format('woff2'); }
+@font-face { font-family: 'Caveat'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/Caveat.woff2') format('woff2'); }
+
+@theme {
+  /* Phase 1 visual foundation — pastel scrapbook tokens, exactly as briefed. */
+  --color-cream: #f8f1e7;
+  --color-cream-deep: #f1e6d3;
+  --color-sage: #e3ebdd;
+  --color-sage-deep: #c9d8bd;
+  --color-rose: #f4dfe3;
+  --color-rose-deep: #e7c3cb;
+  --color-butter: #f8edc9;
+  --color-butter-deep: #eedda0;
+  --color-powder: #dfeaf3;
+  --color-powder-deep: #c2d6e6;
+  --color-lilac: #eae1f1;
+  --color-lilac-deep: #d5c6e4;
+  --color-cocoa: #51443d;
+  --color-cocoa-soft: #6e5e54;
+  --color-plum: #6b5563;
+  --color-paper: #fffdf8;
+
+  /* Phase 11 shared visual universe — daytime cottage picture palette.
+     These sit on top of the Phase 1 pastel tokens, they do not replace
+     them: cream ground, cocoa text, serif headings and Caveat notes stay.
+     Mint = cottage walls, pink = roof, lavender = door, sky = sky and
+     water, butter = lit windows, leaf = garden. */
+  --color-cottage-mint: #bfe6c8;
+  --color-cottage-mint-deep: #93c9a0;
+  --color-cottage-pink: #f6b8c9;
+  --color-cottage-pink-deep: #e89ab0;
+  --color-cottage-lavender: #d8c6ee;
+  --color-cottage-lavender-deep: #b89fd6;
+  --color-cottage-sky: #cfe9f7;
+  --color-cottage-sky-deep: #a5d1ea;
+  --color-cottage-butter: #fdf0b8;
+  --color-cottage-butter-deep: #f2dd8a;
+  --color-leaf: #7aa87a;
+
+  /* Compatibility remap: older components use night/ivory/gold names.
+     They resolve to the pastel world, so rooms restyle without logic changes. */
+  --color-night-950: #efe4d0;
+  --color-night-900: #f8f1e7;
+  --color-night-800: #fffdf8;
+  --color-night-700: #f8edc9;
+  --color-blue-muted: #7d8a6e;
+  --color-blue-soft: #8a7d8a;
+  --color-gold: #8a6d4b;
+  --color-gold-soft: #6b5563;
+  --color-ivory: #51443d;
+  --color-ivory-dim: #6e5e54;
+
+  /* Phase 1 typography: DM Serif Display for editorial headings,
+     DM Sans for interface text, Caveat only for small annotations. */
+  --font-serif: "DM Serif Display", "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-sans: "DM Sans", ui-sans-system, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-hand: "Caveat", cursive;
+
+  /* Design-system tokens (this phase): the radii, shadows, spacing and
+     motion values that were previously hardcoded as arbitrary values or
+     repeated literals in shared components. They extend, never replace,
+     the Phase 1 pastel and Phase 11 cottage colour tokens above, and
+     they are all drawn from the same cottage palette (cream paper,
+     mint walls, pink roof, lavender door, sky blue, lit-window butter,
+     garden leaf, warm cocoa). Radius/shadow tokens are Tailwind theme
+     keys, so they are also usable as rounded and shadow utilities. */
+  --radius-plate: 28px;
+  --radius-card: 24px;
+  --radius-note: 18px;
+  --radius-chip: 9999px;
+  --shadow-paper: 0 1px 0 rgba(81, 68, 61, 0.06), 0 14px 30px rgba(81, 68, 61, 0.12);
+  --shadow-card: 0 10px 24px rgba(81, 68, 61, 0.10);
+  --shadow-plate: 0 16px 32px rgba(81, 68, 61, 0.18);
+  --shadow-lift: 0 20px 36px rgba(81, 68, 61, 0.16);
+  --shadow-chip: 0 3px 10px rgba(81, 68, 61, 0.25);
+  /* Spacing scale (plain custom properties, read with var() in the
+     shared classes below): 4 / 8 / 12 / 16 / 20 / 24px. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  /* Motion: gentle only — nothing snappy, nothing bouncy. The two
+     reduced-motion blocks below (system + .reduce-motion) already
+     collapse every animation/transition to .01ms, so any class that
+     uses these tokens inherits that behaviour for free. */
+  --duration-quick: 150ms;
+  --duration-gentle: 200ms;
+  --duration-slow: 700ms;
+  --ease-gentle: ease;
+  --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Phase 11 design-system tokens (this phase, additive only):
+     frame/motif shadows, the frame radius, the extra spacing steps,
+     and the slow bob duration are all consumed by .ds-* classes below
+     and by design-primitives.tsx — no token here is declared-but-unused. */
+  --shadow-frame: 0 8px 20px rgba(81, 68, 61, 0.10);
+  --shadow-motif: 0 3px 10px rgba(81, 68, 61, 0.25);
+  --radius-frame: 20px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --duration-float: 7s;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  /* Phase 1 page ground: solid vanilla cream, warm-brown text.
+     No dark gradient, no neon, no glass — the photograph on Home
+     carries the night colour; the page itself stays paper-light. */
+  background: #f8f1e7;
+  color: #51443d;
+  font-family: var(--font-sans);
+}
+::selection { background: #f8edc9; color: #51443d; }
+
+:focus-visible { outline: 2px solid #6b5563; outline-offset: 3px; border-radius: 6px; }
+
+.font-serif-display { font-family: var(--font-serif); font-weight: 400; }
+.font-hand { font-family: var(--font-hand); }
+
+/* Paper card: soft shadow, warm border. No glow, no glass. */
+.paper-card {
+  background: #fffdf8;
+  border: 1px solid rgba(81, 68, 61, 0.22);
+  box-shadow: var(--shadow-paper);
+}
+.letter-paper {
+  background-color: #fffdf8;
+  background-image: repeating-linear-gradient(transparent, transparent 27px, rgba(125, 138, 110, 0.25) 28px);
+  border: 1px solid #e8dcc6;
+  border-radius: 16px;
+  padding: 20px 18px;
+  line-height: 28px;
+}
+/* Washi tape strip, used on cards and polaroids. */
+.washi {
+  display: block;
+  width: 84px;
+  height: 22px;
+  margin: -26px auto 10px;
+  border-radius: 2px;
+  opacity: 0.85;
+  transform: rotate(-2deg);
+  box-shadow: 0 1px 2px rgba(81, 68, 61, 0.15);
+}
+.washi-sage { background: repeating-linear-gradient(45deg, #e3ebdd 0 8px, #c9d8bd 8px 16px); }
+.washi-rose { background: repeating-linear-gradient(45deg, #f4dfe3 0 8px, #e7c3cb 8px 16px); }
+.washi-butter { background: repeating-linear-gradient(45deg, #f8edc9 0 8px, #eedda0 8px 16px); }
+.washi-powder { background: repeating-linear-gradient(45deg, #dfeaf3 0 8px, #c2d6e6 8px 16px); }
+.washi-lilac { background: repeating-linear-gradient(45deg, #eae1f1 0 8px, #d5c6e4 8px 16px); }
+
+/* Polaroid: white frame, photo, handwritten caption, slight varied rotation. */
+.polaroid {
+  background: #fffdf8;
+  border: 1px solid #e8dcc6;
+  box-shadow: var(--shadow-paper);
+  padding: 10px 10px 14px;
+  transition: transform var(--duration-gentle) var(--ease-gentle), box-shadow var(--duration-gentle) var(--ease-gentle);
+}
+.polaroid:hover { transform: rotate(0deg) translateY(-3px) !important; box-shadow: var(--shadow-lift); }
+.rot-l { transform: rotate(-1.4deg); }
+.rot-r { transform: rotate(1.2deg); }
+.rot-0 { transform: rotate(-0.3deg); }
+
+/* Private journal: visually distinct — lilac, stitched edge, never mistaken for shared. */
+.journal-private {
+  background: #eae1f1;
+  border: 1.5px dashed #9b86ad;
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+/* Room tiles on Home: pastel, organic, gentle lift. */
+.room-tile { transition: transform var(--duration-gentle) var(--ease-gentle), box-shadow var(--duration-gentle) var(--ease-gentle); }
+.room-tile:hover { transform: translateY(-3px) rotate(0deg) !important; box-shadow: var(--shadow-lift); }
+
+/* Home hero hotspot: a quiet paper chip pinned on the photograph —
+   no glow, no ping ring, no neon. The photo itself is the artwork;
+   no CSS stars, fireflies or window glows are layered over it. */
+.hotspot { position: absolute; transform: translate(-50%, -50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.hotspot-dot { position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--radius-chip); background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.45); color: #51443d; font-size: 20px; box-shadow: var(--shadow-chip); transition: transform var(--duration-quick) var(--ease-gentle); }
+.hotspot:hover .hotspot-dot, .hotspot:focus-visible .hotspot-dot { transform: scale(1.08); }
+.hotspot-label { white-space: nowrap; border-radius: 9999px; background: rgba(255, 253, 248, 0.96); border: 1px solid rgba(81, 68, 61, 0.3); padding: 2px 9px; font-size: 11px; font-weight: 800; color: #51443d; box-shadow: 0 2px 8px rgba(81, 68, 61, 0.2); }
+@media (max-width: 640px) {
+  .hotspot-dot { width: 38px; height: 38px; font-size: 17px; }
+  .hotspot-label { font-size: 10px; padding: 1px 7px; }
+}
+
+/* Phase 11 room-identity motifs: pure CSS shapes, decorative only
+   (aria-hidden in the component), never a control or a data display.
+   Each room gets one motif so the shared Page template no longer
+   makes every room look identical at the top. */
+.identity-strip { display: flex; align-items: flex-end; gap: var(--space-3); min-height: 74px; margin-bottom: 2px; overflow: hidden; }
+.motif-envelope { position: relative; width: 74px; height: 50px; flex-shrink: 0; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 6px; transform: rotate(-3deg); }
+.motif-envelope::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 26px; background: #f6b8c9; clip-path: polygon(0 0, 100% 0, 50% 100%); border-radius: 6px 6px 0 0; }
+.motif-stamp { width: 30px; height: 36px; flex-shrink: 0; background: #cfe9f7; border: 1.5px dashed rgba(81, 68, 61, 0.5); border-radius: 4px; transform: rotate(4deg); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.motif-arch { width: 58px; height: 74px; flex-shrink: 0; background: #fdf0b8; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 29px 29px 8px 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.motif-frame { width: 54px; height: 62px; flex-shrink: 0; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.45); outline: 4px solid #d8c6ee; outline-offset: -7px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.motif-path { flex: 1; border-top: 3px dashed rgba(81, 68, 61, 0.4); position: relative; height: 0; margin-bottom: 18px; }
+.motif-dot { position: absolute; top: -9px; width: 16px; height: 16px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+/* Design-system motifs (this phase): shared, reusable, decorative-only
+   pieces for the identity strips. Each is used in exactly one room —
+   the room whose identity calls for it — never plastered everywhere.
+   They sit inside the aria-hidden identity strip, so they carry no
+   controls, no data and no text a screen reader needs. */
+/* Cottage door (settings): lavender arch with a knob, distinct from the
+   quiet room's window below — a door is an entrance, not a view. */
+.motif-door { width: 58px; height: 74px; flex-shrink: 0; background: #d8c6ee; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 29px 29px 8px 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; position: relative; }
+.motif-door::after { content: ""; position: absolute; right: 10px; top: 50%; width: 7px; height: 7px; border-radius: 9999px; background: #f2dd8a; border: 1px solid rgba(81, 68, 61, 0.5); }
+/* Lit cottage window (quiet): sky arch with butter panes, so the nook
+   reads as a window to sit beside rather than a second door. */
+.motif-window { width: 58px; height: 74px; flex-shrink: 0; background: #cfe9f7; background-image: linear-gradient(to right, transparent 26px, rgba(81, 68, 61, 0.45) 26px 29px, transparent 29px), linear-gradient(to bottom, transparent 34px, rgba(81, 68, 61, 0.45) 34px 37px, transparent 37px); border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 29px 29px 8px 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+/* Map marker (future): the same pin language as .map-pin, but sized
+   for the flex identity strip instead of the absolute trail layout. */
+.motif-marker { width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius-chip); display: flex; align-items: center; justify-content: center; font-size: 20px; border: 2px solid rgba(81, 68, 61, 0.5); background: #fdf0b8; box-shadow: var(--shadow-chip); }
+/* Collectible symbols (arcade): star/coin tokens, one shared shape for
+   every game-world marker instead of three inline ad-hoc circles. */
+.motif-collectible { flex-shrink: 0; border-radius: var(--radius-chip); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-chip); }
+/* Keepsake box (deleted): a closed lavender box, kept safe — the lid
+   line says "closed" without any open/close control. */
+.motif-keepsake { width: 64px; height: 48px; flex-shrink: 0; border-radius: 8px; border: 1.5px solid rgba(81, 68, 61, 0.45); background: #d8c6ee; background-image: linear-gradient(to bottom, transparent 13px, rgba(81, 68, 61, 0.45) 13px 15px, transparent 15px); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: var(--shadow-chip); }
+
+/* User-chosen reduced motion (Settings): mirrors the system
+   prefers-reduced-motion block below, so the preference works
+   even on a device without that system setting. */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+.reduce-motion .float-soft { animation: none; }
+
+/* Phase 12 room compositions: decorative surfaces only. No form, list or
+   game logic lives in these classes, and none of them hides a control. */
+.timeline-wrap { position: relative; padding-left: 28px; }
+.timeline-wrap::before { content: ""; position: absolute; left: 9px; top: 4px; bottom: 4px; width: 3px; background: repeating-linear-gradient(to bottom, rgba(81, 68, 61, 0.45) 0 10px, transparent 10px 18px); border-radius: 3px; }
+.timeline-dot { position: absolute; left: 0; top: 6px; width: 21px; height: 21px; border-radius: 9999px; background: #f6b8c9; border: 2px solid rgba(81, 68, 61, 0.5); }
+.collage-wrap { columns: 2; column-gap: 14px; }
+@media (min-width: 1024px) { .collage-wrap { columns: 3; } }
+.collage-item { break-inside: avoid; margin-bottom: 14px; }
+/* Letters: envelope card with a stamp corner. The stamp is decoration;
+   the status line and the Open button are the real controls. */
+.envelope-card { position: relative; }
+.stamp-corner { position: absolute; top: 12px; right: 12px; width: 36px; height: 44px; background: #cfe9f7; border: 1.5px dashed rgba(81, 68, 61, 0.5); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 18px; transform: rotate(4deg); }
+.envelope-flap { height: 26px; margin: -4px -4px 10px; background: #f6b8c9; clip-path: polygon(0 0, 100% 0, 50% 100%); border-radius: 6px 6px 0 0; transform-origin: top; }
+@keyframes envelopeOpen { from { transform: perspective(400px) rotateX(0deg); } to { transform: perspective(400px) rotateX(65deg); } }
+.envelope-flap-open { animation: envelopeOpen var(--duration-slow) var(--ease-gentle) forwards; }
+/* Quiet Room nook: a rainy window panel. Rain is a CSS pattern, not an
+   image, and it only animates when the room's animation toggle is on. */
+.nook-window { position: relative; overflow: hidden; border: 2px solid rgba(81, 68, 61, 0.4); border-radius: 18px; background: #cfe9f7; min-height: 150px; display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+.nook-window::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(105deg, transparent 0 22px, rgba(255, 255, 255, 0.55) 22px 24px); opacity: 0.5; }
+.rain-on .nook-window::before { animation: rainDrift 3s linear infinite; }
+@keyframes rainDrift { from { background-position: 0 0; } to { background-position: 60px 60px; } }
+/* Appreciations museum: framed card with a label plate underneath. */
+.museum-frame { border: 1.5px solid rgba(81, 68, 61, 0.45); outline: 5px solid #fffdf8; outline-offset: -9px; box-shadow: var(--shadow-paper); }
+.museum-label { display: inline-block; margin-top: 10px; background: #f8edc9; border: 1px solid rgba(81, 68, 61, 0.35); padding: 2px 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+/* Future map: a dashed trail down the left, one pin per destination. */
+.map-trail { position: relative; padding-left: 44px; }
+.map-trail::before { content: ""; position: absolute; left: 19px; top: 8px; bottom: 8px; width: 3px; border-left: 3px dashed rgba(81, 68, 61, 0.45); }
+.map-pin { position: absolute; left: 0; top: 14px; width: 40px; height: 40px; border-radius: var(--radius-chip); display: flex; align-items: center; justify-content: center; font-size: 20px; border: 2px solid rgba(81, 68, 61, 0.5); box-shadow: var(--shadow-chip); }
+/* Reminder noticeboard: pinned notes on a warm board panel. */
+.noticeboard { background: #f1e6d3; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); }
+.pinned-note { position: relative; }
+.pinned-note::before { content: ""; position: absolute; top: -6px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 9999px; background: #e89ab0; border: 2px solid rgba(81, 68, 61, 0.5); box-shadow: 0 2px 4px rgba(81, 68, 61, 0.3); }
+
+/* Tiny floating decoration: slow, subtle, and only one element at a time. */
+.float-soft { animation: floatSoft 7s var(--ease-soft) infinite; }
+@keyframes floatSoft { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-6px) rotate(4deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .float-soft { animation: none; }
+}
+
+/* Room-identity phase (this phase): framing classes only, appended
+   after every existing token. No existing class is rewritten, no
+   control is hidden, and every class below is a wrapper or a tint
+   around controls that already exist. Colours are all Phase 1 /
+   Phase 11 tokens, so shared tokens stay shared. */
+/* Letters — the post office: a counter panel around the sorted
+   envelopes, with a rail line like a counter edge. The pigeonhole
+   tabs, search, stamp corner and envelope cards are unchanged. */
+.post-office { background: #f1e6d3; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); }
+.post-counter { margin: 0 0 var(--space-3); padding-bottom: var(--space-3); border-bottom: 3px double rgba(81, 68, 61, 0.35); font-size: 13px; font-weight: 700; color: #6e5e54; }
+@media (max-width: 640px) { .post-office { padding: var(--space-3); } }
+/* Memories — the scrapbook: the scrapbook grid sits on a stitched
+   spread page, and pages vary a little more in tilt and size so the
+   grid reads as a scrapbook at a glance, not a uniform card grid.
+   Timeline and Collage layouts are untouched. */
+.scrapbook-spread { background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); box-shadow: var(--shadow-paper); }
+.scrapbook-grid li:nth-child(4n+2) .polaroid { transform: rotate(1.8deg); }
+.scrapbook-grid li:nth-child(4n+3) .polaroid { transform: rotate(-2.2deg); }
+@media (min-width: 1024px) {
+  .scrapbook-grid li:nth-child(4n+1) .polaroid { transform: rotate(-1deg) scale(1.02); }
+  .scrapbook-grid li:nth-child(4n+3) .polaroid { transform: rotate(-2.2deg) scale(0.98); }
+}
+@media (max-width: 640px) { .scrapbook-spread { padding: var(--space-3); } }
+/* Quiet — the reading nook: a warm seating panel around the breathing
+   armchair and the supportive-note side table, under the rainy window.
+   The animation toggle, rain toggle, breathing, journal and voice
+   controls are all unchanged inside it. */
+.reading-nook { background: linear-gradient(to bottom, #e3ebdd 0, #f8f1e7 140px); border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); }
+.nook-armchair { background: #e3ebdd; border-bottom: 6px solid #c9d8bd; }
+.nook-note { border-top: 6px solid #e7c3cb; }
+@media (max-width: 640px) { .reading-nook { padding: var(--space-3); } }
+/* Reminders — the noticeboard, framed: a thicker cork-board edge and
+   pins in alternating colours. Notes, filters and edit flows unchanged. */
+.noticeboard-frame { border-width: 3px; border-color: rgba(81, 68, 61, 0.45); box-shadow: var(--shadow-paper); }
+.noticeboard-frame .pinned-note:nth-child(2n)::before { background: #bfe6c8; }
+.noticeboard-frame .pinned-note:nth-child(3n)::before { background: #fdf0b8; }
+/* Appreciations — the museum: notes hang on a gallery wall panel with
+   a picture rail line along the top. Frames and labels unchanged. */
+.museum-wall { background: #eae1f1; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); border-top: 6px solid rgba(81, 68, 61, 0.35); }
+@media (max-width: 640px) { .museum-wall { padding: var(--space-3); } }
+/* Future — the map, evolution: the legend names the two markers, and
+   a collected stop's card is mint-tinted with a solid leaf edge so a
+   done plan reads as collected at a glance, not just by its pin.
+   Planned cards keep the plain paper card and the dashed trail. */
+.future-legend { margin-bottom: var(--space-4); font-size: 13px; font-weight: 700; color: #6e5e54; }
+.future-done { background: #e3ebdd; border-left: 6px solid #7aa87a; }
+.future-planned { border-left: 4px dashed rgba(81, 68, 61, 0.35); }
+/* The map pin sits on the card's top-left corner (Phase 12 layout), so
+   the card's text needs clearance past the 40px pin, or the pin covers
+   the first words of the category line. This only moves text, not the
+   pin, the trail, or any control. */
+.future-done, .future-planned { padding-left: 56px; }
+/* Arcade — the game world: a marquee strip over the cabinets, and each
+   cabinet card gets a lit top strip. Games, scores and controls unchanged. */
+.arcade-marquee { margin: 0 0 var(--space-3); font-family: var(--font-serif); font-size: 20px; color: #51443d; }
+.arcade-cabinet { position: relative; border-width: 2px; }
+.arcade-cabinet::before { content: ""; display: block; height: 10px; margin-bottom: var(--space-3); border-radius: 9999px; background: repeating-linear-gradient(90deg, #f6b8c9 0 18px, #fdf0b8 18px 36px, #bfe6c8 36px 54px, #cfe9f7 54px 72px); }
+/* Deleted — the keepsake box: deleted items sit inside a closed-box
+   panel. Restore and permanent-delete controls are unchanged. */
+.keepsake-box { background: #eae1f1; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); border-top: 6px double rgba(81, 68, 61, 0.45); }
+.keepsake-item { border-style: dashed; }
+@media (max-width: 640px) { .keepsake-box { padding: var(--space-3); } }
+/* Hero / board intros: a tinted panel each, so the two arcade worlds
+   do not open on identical paper cards. Game logic unchanged. */
+.hero-panel { background: linear-gradient(to bottom, #dfeaf3, #fffdf8 160px); }
+.hero-map { background: linear-gradient(to bottom, #dfeaf3, #fffdf8 160px); border-style: dashed; }
+.board-table { background: linear-gradient(to bottom, #f8edc9, #fffdf8 160px); }
+/* Identity-strip additions (motif strip only): a postmark ring for
+   Letters, a lamp shape for the Quiet nook, and a collected flag for
+   Future — the flag previews the map's done marker. Decorative only. */
+.motif-postmark { width: 34px; height: 34px; flex-shrink: 0; border-radius: 9999px; border: 1.5px dashed rgba(81, 68, 61, 0.5); background: #f4dfe3; transform: rotate(8deg); margin-bottom: 14px; }
+.motif-lamp { width: 34px; height: 46px; flex-shrink: 0; background: #fdf0b8; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 17px 17px 4px 4px; margin-bottom: 8px; box-shadow: 0 0 0 4px rgba(253, 240, 184, 0.35); }
+.motif-flag { width: 36px; height: 36px; flex-shrink: 0; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 18px; border: 2px solid rgba(81, 68, 61, 0.5); background: #bfe6c8; box-shadow: var(--shadow-chip); margin-bottom: 12px; }
+
+/* Settings — the cottage workshop: settings cards sit inside a lavender
+   workshop panel with a double-rule top edge (cottage-door colour), so
+   Settings reads as its own room, not a plain card stack. All settings
+   controls and logic are unchanged. */
+.settings-workshop { background: #eae1f1; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); border-top: 6px double rgba(81, 68, 61, 0.45); }
+@media (max-width: 640px) { .settings-workshop { padding: var(--space-3); } }
+
+/* Fullscreen cottage Home (this phase): the scene is the whole viewport.
+   Height falls back gracefully for older mobile browsers (vh, then svh,
+   then dvh — later declarations win where supported), so the scene
+   fills the screen without a gap or an extra scroll. The gear control
+   on Home is translucent at rest and clears on hover/focus. */
+.home-fullscreen { position: relative; width: 100vw; height: 100vh; height: 100svh; height: 100dvh; overflow: hidden; }
+.home-gear { background: rgba(255, 253, 248, 0.55); border: 1.5px solid rgba(81, 68, 61, 0.35); color: #51443d; box-shadow: 0 2px 8px rgba(81, 68, 61, 0.2); }
+.home-gear:hover, .home-gear:focus-visible { background: rgba(255, 253, 248, 0.95); }
+
+/* Home-polish phase: gentle, shared motion only (transform/opacity, so
+   nothing jumps layout), all on the existing motion tokens. The intro
+   already animates and is left alone. Every class below is collapsed
+   by the existing reduced-motion blocks (the system * rule) and again
+   explicitly at the foot of this block, so "everything has motion"
+   never strips the reduced-motion fallback. */
+/* Cottage labels float gently with the scene; the keyframes carry the
+   full translate(-50%, …) so the label never drifts sideways. */
+.cottage-label { animation: labelFloat 6s var(--ease-soft) infinite alternate; }
+@keyframes labelFloat { from { transform: translate(-50%, -4px); } to { transform: translate(-50%, -8px); } }
+/* Evolving-world decoration: flowers sway (the ✿ glyph is near-symmetric,
+   so the sway's translateY replaces the per-flower tilt while it runs;
+   with motion reduced the animation stops and the inline tilt returns)
+   and bunting flags rock from their top edge, staggered by inline delay. */
+.scene-flower { animation: flowerSway 7s var(--ease-soft) infinite alternate; }
+@keyframes flowerSway { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+.bunting-flag { animation: buntingSway 6s var(--ease-soft) infinite alternate; transform-origin: top center; }
+@keyframes buntingSway { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }
+/* Title card and rooms-path stops: one shared gentle entrance, staggered
+   on the path by inline delay. No layout property is animated. */
+.title-card-enter, .path-stop-enter { animation: cardRise var(--duration-slow) var(--ease-soft) both; }
+@keyframes cardRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+/* Shared buttons (ui Button): hover lift, press scale. Disabled buttons
+   never lift. Room tiles already lift on hover; the press rule below
+   sits after their hover rule, so a pressed tile scales instead of
+   staying lifted. */
+.btn-motion { transition: transform var(--duration-gentle) var(--ease-gentle), box-shadow var(--duration-gentle) var(--ease-gentle), background-color var(--duration-gentle) var(--ease-gentle); }
+.btn-motion:not(:disabled):hover { transform: translateY(-2px); }
+.btn-motion:not(:disabled):active { transform: translateY(0) scale(0.97); }
+.room-tile:active { transform: translateY(0) scale(0.97) !important; }
+/* Bottom navigation: the active pill lifts slightly (so switching rooms
+   visibly moves the indicator) and every item presses; the bar itself
+   reserves the device safe area below its own padding. */
+.bottom-nav-btn { transition: transform var(--duration-gentle) var(--ease-gentle), background-color var(--duration-gentle) var(--ease-gentle), box-shadow var(--duration-gentle) var(--ease-gentle); }
+.bottom-nav-btn[aria-current="page"] { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(81, 68, 61, 0.25); }
+.bottom-nav-btn:active { transform: scale(0.94); }
+.bottom-nav-bar { padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+/* Explicit reduced-motion kill-switches for this block, in addition to
+   the existing system * rule above (the existing blocks are untouched). */
+.reduce-motion .cottage-label, .reduce-motion .scene-flower, .reduce-motion .bunting-flag, .reduce-motion .title-card-enter, .reduce-motion .path-stop-enter { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .cottage-label, .scene-flower, .bunting-flag, .title-card-enter, .path-stop-enter { animation: none !important; }
+}
+
+/* Phase 11 design-system surfaces (this phase): classes for
+   design-primitives.tsx only. No existing class is changed. All colours
+   are Phase 1 / Phase 11 tokens; borders are warm cocoa; animations are
+   transform-only and already killed by the reduced-motion blocks above
+   (the .ds-empty-motif bob reuses --duration-float and is also killed
+   explicitly below for the .reduce-motion class). */
+.ds-motif { display: inline-flex; align-items: flex-end; gap: var(--space-2); min-height: 52px; font-size: 22px; line-height: 1; }
+.ds-motif .motif-envelope, .ds-motif .motif-window, .ds-motif .motif-frame, .ds-motif .motif-keepsake, .ds-motif .motif-door { margin-bottom: 0; }
+.ds-empty { border: 1.5px dashed rgba(81, 68, 61, 0.4); border-radius: var(--radius-frame); padding: var(--space-8) var(--space-5); text-align: center; box-shadow: var(--shadow-frame); }
+.ds-empty-motif { display: flex; justify-content: center; margin-bottom: var(--space-4); }
+.ds-empty-motif .ds-motif { animation: dsBob var(--duration-float) var(--ease-soft) infinite alternate; }
+@keyframes dsBob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+.ds-empty-reminders { background: #f8edc9; }
+.ds-empty-memories { background: #f4dfe3; }
+.ds-empty-letters { background: #dfeaf3; }
+.ds-empty-quiet { background: #e3ebdd; }
+.ds-empty-appreciations { background: #eae1f1; }
+.ds-empty-future { background: #dfeaf3; border-style: solid; border-left: 6px solid #7aa87a; }
+.ds-empty-arcade { background: #fdf0b8; }
+.ds-empty-deleted { background: #eae1f1; border-style: solid; border-top: 6px double rgba(81, 68, 61, 0.45); }
+.ds-create { border-radius: var(--radius-frame); padding: var(--space-5); box-shadow: var(--shadow-frame); }
+.ds-create-reminders { background: #f1e6d3; border: 1.5px solid rgba(81, 68, 61, 0.3); }
+.ds-create-appreciations { background: #eae1f1; border: 1.5px solid rgba(81, 68, 61, 0.3); }
+.ds-create-future { background: #dfeaf3; border: 1.5px dashed rgba(81, 68, 61, 0.4); }
+.ds-create-quiet { background: linear-gradient(to bottom, #e3ebdd 0, #f8f1e7 140px); border: 1.5px solid rgba(81, 68, 61, 0.3); }
+.ds-create .paper-card { box-shadow: var(--shadow-motif); }
+.ds-frame { border-radius: var(--radius-frame); padding: var(--space-7); }
+.ds-frame-settings { background: #d8c6ee; border: 1.5px solid rgba(81, 68, 61, 0.3); }
+.ds-intro-motif { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); min-height: 40px; }
+.reduce-motion .ds-empty-motif .ds-motif { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .ds-empty-motif .ds-motif { animation: none !important; } }
+@media (max-width: 640px) { .ds-empty { padding: var(--space-6) var(--space-4); } .ds-create { padding: var(--space-4); } }
+
+/* Phase 12A — Full-screen room worlds (Memories, Letters, Quiet only).
+   The world element is exactly the viewport and scrolls inside itself;
+   App.tsx suppresses the bottom nav and demo banner while it is open,
+   so no app-shell background shows around it. Backgrounds are flat
+   token colours / gentle gradients only — no photographs, no external
+   assets. All animations here are transform/opacity only and are
+   already collapsed by the reduced-motion blocks above. */
+.room-world { width: 100vw; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; color: #51443d; }
+.room-world-memories { background: #f8f1e7; background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(81, 68, 61, 0.05) 31px 32px); }
+.room-world-letters { background: linear-gradient(to bottom, #f1e6d3 0, #f8f1e7 320px); }
+.room-world-quiet { background: linear-gradient(to bottom, #e3ebdd 0, #dfeaf3 420px, #f8f1e7 900px); }
+.room-world-appreciations { background: linear-gradient(to bottom, #eae1f1 0, #f8f1e7 420px, #f8edc9 1100px); }
+.room-world-future { background: linear-gradient(to bottom, #dfeaf3 0, #e3ebdd 420px, #f8f1e7 1100px); }
+.room-world-reminders { background: linear-gradient(to bottom, #f8edc9 0, #f4dfe3 420px, #f8f1e7 1100px); }
+.room-world-keepsakes { background: linear-gradient(to bottom, #f8edc9 0, #eae1f1 420px, #f8f1e7 1100px); }
+.room-world-search { background: linear-gradient(to bottom, #dfeaf3 0, #f8f1e7 420px, #eae1f1 1100px); }
+.room-world-header { position: sticky; top: 0; z-index: 30; border-bottom: 1.5px solid rgba(81, 68, 61, 0.25); }
+.room-world-header-memories { background: #f8f1e7; }
+.room-world-header-letters { background: #f1e6d3; }
+.room-world-header-quiet { background: #e3ebdd; }
+.room-world-header-appreciations { background: #eae1f1; }
+.room-world-header-future { background: #dfeaf3; }
+.room-world-header-reminders { background: #f8edc9; }
+.room-world-header-keepsakes { background: #f8edc9; }
+.room-world-header-search { background: #dfeaf3; }
+/* Phase 13 — arcade pixel road: one thin decorative row, CSS only,
+   no animation, no layout width change to the cabinets below. */
+.pixel-road { display: flex; gap: 6px; justify-content: center; margin: 2px 0 10px; font-size: 14px; line-height: 1; color: #6b5563; }
+.room-world-bar { margin: 0 auto; max-width: 64rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; }
+.room-world-back { min-height: 44px; border-radius: 9999px; border: 1.5px solid rgba(81, 68, 61, 0.35); background: #fffdf8; padding: 8px 16px; font-size: 14px; font-weight: 800; color: #51443d; }
+.room-world-back:hover { background: #f8edc9; }
+.room-world-switch { min-height: 44px; border-radius: 9999px; padding: 8px 14px; font-size: 12px; font-weight: 700; color: #51443d; text-decoration: underline; }
+.room-world-inner { margin: 0 auto; width: 100%; max-width: 64rem; padding: 24px 16px 80px; }
+.room-world-heading h1 { font-family: "DM Serif Display", Georgia, serif; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.1; }
+.room-world-hand { font-family: "Caveat", cursive; font-size: 1.75rem; line-height: 1.2; color: #6b5563; margin-top: 4px; }
+.room-world-sub { margin-top: 8px; max-width: 42rem; font-size: 15px; line-height: 1.6; color: #6e5e54; }
+.room-world-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 20px; }
+.pressed-flowers, .post-office-strip, .nook-strip { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 4px 0 12px; font-size: 20px; color: #6b5563; }
+.post-office-strip, .nook-strip { font-size: 14px; font-weight: 700; }
+/* Phase 12B — museum, map and noticeboard world scenes. Flat palette
+   colours, glyphs and dashed paths only — no photographs, no external
+   assets, no copied reference art. All animations transform/opacity
+   only and collapse under the global reduced-motion blocks. */
+.museum-shelf { background: #fffdf8; border: 1.5px solid rgba(81,68,61,0.3); border-top: 6px solid rgba(81,68,61,0.45); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px rgba(81,68,61,0.10); }
+.museum-exhibit { text-align: left; width: 100%; }
+.museum-exhibit:hover .museum-frame { transform: translateY(-2px); }
+.museum-frame { transition: transform 200ms ease; }
+.keepsake-strip { background: #f8edc9; border: 1.5px solid rgba(81,68,61,0.3); border-radius: 20px; padding: 14px 16px; }
+.keepsake-strip button { text-align: left; }
+.map-scene { position: relative; background: #fffdf8; border: 1.5px solid rgba(81,68,61,0.3); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px rgba(81,68,61,0.10); overflow: hidden; }
+.map-scene::before { content: ""; position: absolute; inset: 12px; border: 2px dashed rgba(81,68,61,0.25); border-radius: 14px; pointer-events: none; }
+.map-markers { position: relative; display: flex; flex-wrap: wrap; gap: 10px; }
+.map-marker-btn { min-height: 44px; min-width: 44px; border-radius: 9999px; border: 2px solid rgba(81,68,61,0.5); padding: 6px 12px; font-size: 13px; font-weight: 800; color: #51443d; background: #f8edc9; }
+.map-marker-btn.done { background: #bfe6c8; }
+.map-marker-btn:hover { transform: translateY(-2px); }
+.map-marker-btn { transition: transform 200ms ease; }
+.upcoming-strip { background: #e3ebdd; border: 1.5px solid rgba(81,68,61,0.3); border-radius: 20px; padding: 14px 16px; }
+.note-board-world { background: #f1e6d3; border: 3px solid rgba(81,68,61,0.45); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px rgba(81,68,61,0.10); }
+.note-pinned { position: relative; }
+.note-pinned .pinned-label { display: inline-block; background: #f6b8c9; border: 1px solid rgba(81,68,61,0.35); padding: 2px 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 9999px; }
+@keyframes noteUnfold { from { opacity: 0; transform: perspective(600px) rotateX(-10deg) translateY(-6px); } to { opacity: 1; transform: perspective(600px) rotateX(0deg) translateY(0); } }
+.note-unfold { animation: noteUnfold 600ms ease forwards; transform-origin: top; }
+@media (max-width: 640px) { .museum-shelf, .map-scene, .note-board-world { padding: 12px; } }
+.timeline-ribbon { margin: 0 0 20px; padding: 14px 16px; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: 20px; box-shadow: 0 8px 20px rgba(81, 68, 61, 0.10); }
+.timeline-ribbon-label { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #6b5563; margin-bottom: 10px; }
+.timeline-ribbon ol { display: flex; flex-wrap: wrap; gap: 6px 0; list-style: none; }
+.timeline-ribbon li { display: flex; align-items: center; }
+.timeline-ribbon li:not(:last-child)::after { content: ""; width: 22px; height: 2px; background: rgba(81, 68, 61, 0.35); flex-shrink: 0; }
+.timeline-ribbon button { display: flex; align-items: center; gap: 6px; min-height: 44px; border-radius: 9999px; padding: 6px 10px; text-align: left; }
+.timeline-ribbon button:hover { background: #f8edc9; }
+.timeline-ribbon-dot { width: 14px; height: 14px; flex-shrink: 0; border-radius: 9999px; background: #f6b8c9; border: 2px solid rgba(81, 68, 61, 0.5); }
+.timeline-ribbon-date { font-size: 12px; font-weight: 800; color: #6e5e54; white-space: nowrap; }
+.timeline-ribbon-title { font-size: 13px; color: #51443d; }
+/* Memories: scrapbook creation + viewer. The preview polaroid and the
+   viewer frame are paper, washi and shadow only. */
+.scrapbook-form { background: #fffdf8; }
+.memory-preview-polaroid { margin: 0 auto 4px; max-width: 320px; padding: 12px 12px 8px; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.3); box-shadow: 0 14px 30px rgba(81, 68, 61, 0.12); transform: rotate(-1.5deg); }
+.memory-preview-polaroid img { width: 100%; border-radius: 8px; object-fit: contain; }
+.memory-viewer { padding: 12px 12px 4px; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: 8px; box-shadow: 0 14px 30px rgba(81, 68, 61, 0.12); }
+/* Letters: wax seal (CSS circle, glyph centre) and the paper-unfold
+   animation — transform/opacity only, reduced-motion safe via the
+   global blocks above. */
+.wax-seal { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; margin-left: 8px; border-radius: 9999px; background: #a85a5a; color: #f8edc9; font-size: 16px; box-shadow: 0 2px 6px rgba(81, 68, 61, 0.35); vertical-align: middle; }
+.wax-seal-large { width: 56px; height: 56px; font-size: 26px; margin: 12px 0 0; }
+@keyframes letterUnfold { from { opacity: 0; transform: perspective(600px) rotateX(-12deg) translateY(-6px); } to { opacity: 1; transform: perspective(600px) rotateX(0deg) translateY(0); } }
+.letter-unfold { animation: letterUnfold 700ms ease forwards; transform-origin: top; }
+.letter-desk { background: #fffdf8; }
+@media (max-width: 640px) { .room-world-inner { padding: 16px 12px 64px; } .timeline-ribbon li:not(:last-child)::after { width: 12px; } }
+
+/* Phase 14 — Secret Detective Mission + arcade completions.
+   Decorative CSS/SVG only, from the existing Phase 11 palette:
+   case folders, pinned clue cards, red-string SVG lines (cosy
+   decoration, never violent imagery), the detective desk strip.
+   No photographs, no copied artwork, no new assets. */
+.detective-desk { position: relative; display: flex; gap: 14px; align-items: flex-start; background: #fdf0b8; border: 1.5px solid rgba(81, 68, 61, 0.35); border-radius: var(--radius-card); padding: var(--space-4); margin-bottom: var(--space-4); overflow: hidden; }
+.detective-desk-glyph { font-size: 34px; flex-shrink: 0; }
+.detective-string { position: absolute; right: 12px; bottom: 8px; width: 120px; height: 40px; opacity: 0.7; }
+@media (max-width: 640px) { .detective-string { display: none; } }
+.detective-folder { background: #f1e6d3; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); }
+.clue-card { position: relative; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: var(--radius-card); padding: var(--space-4); box-shadow: var(--shadow-paper); }
+.clue-card::before { content: ""; position: absolute; top: -6px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 9999px; background: #e89ab0; border: 2px solid rgba(81, 68, 61, 0.5); }
+.detective-board-svg { width: 100%; height: 60px; margin-top: 8px; }
+@keyframes chestOpen { 0% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.25) rotate(-4deg); } 100% { transform: scale(1) rotate(0deg); } }
+.chest-open { animation: chestOpen 0.9s var(--ease-gentle); display: inline-block; }
+.arcade-card-flip { transition: transform 0.25s var(--ease-gentle); }
+@media (prefers-reduced-motion: reduce) {
+  .chest-open { animation: none; }
+  .arcade-card-flip { transition: none; }
+}
+
+/* Phase 17 — High-contrast mode (.high-contrast on the app root,
+   device-local our-place-contrast-v1). Deliberately narrow: darker
+   body text, white paper cards, stronger card borders, darker
+   secondary text — on the key surfaces (Settings cards, room cards,
+   search results). Pastel tints elsewhere are left alone, so the
+   pastel identity survives; this is a contrast improvement on key
+   surfaces, not a full re-theme, and is reported as such. */
+.high-contrast { color: #1a1512; }
+.high-contrast .paper-card { background: #ffffff; border-color: rgba(26, 21, 18, 0.75); }
+.high-contrast .text-cocoa-soft, .high-contrast .text-ivory-dim { color: #3d332c !important; }
+.high-contrast .bg-cream { background-color: #ffffff; }
+.high-contrast .ds-empty { border-color: rgba(26, 21, 18, 0.75); }
+.ds-empty-search { background: #dfeaf3; }
+
+/* STORYBOOK WORLDS — one shared room-enter system, per-room variation.
+   All animations are transform/opacity only. The base class is only
+   an animation name/duration hook: if the CSS fails to load, the
+   world renders fully visible (no base opacity: 0 anywhere), so a
+   failed transition can never hide content or strand navigation.
+   Per-room feel: memories rises (garden growing up), letters settles
+   (envelope landing), quiet fades only and slower (gentle), future
+   slides in from the side (map unfolding), appreciations and
+   keepsakes settle with a soft scale (frames / box lid), reminders
+   rises a touch less than memories. Exit is a brief fade handled by
+   RoomWorld timers, never by animationend. Colours are Phase 11
+   tokens only: cream #F8F1E7, sage #E3EBDD, rose #F4DFE3, butter
+   #F8EDC9, powder #DFEAF3, lilac #EAE1F1, warm brown text #51443d. */
+.room-world { overflow-x: hidden; }
+@keyframes worldEnterRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes worldEnterSettle { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes worldEnterFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes worldEnterMap { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes worldEnterSoftRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes worldExitFade { from { opacity: 1; } to { opacity: 0.35; } }
+.world-enter-memories { animation: worldEnterRise 500ms ease both; }
+.world-enter-letters { animation: worldEnterSettle 480ms ease both; }
+.world-enter-quiet { animation: worldEnterFade 650ms ease both; }
+.world-enter-future { animation: worldEnterMap 520ms ease both; }
+.world-enter-appreciations { animation: worldEnterSettle 480ms ease both; }
+.world-enter-keepsakes { animation: worldEnterSettle 450ms ease both; }
+.world-enter-reminders { animation: worldEnterSoftRise 450ms ease both; }
+.world-enter-search { animation: worldEnterSettle 480ms ease both; }
+.world-exiting { animation: worldExitFade 180ms ease both; }
+.room-world-intro, .page-intro { font-family: "Caveat", cursive; font-size: 1.6rem; line-height: 1.25; color: #6b5563; margin-top: 6px; }
+.room-world-footer { margin-top: 32px; padding-top: 20px; border-top: 2px dashed rgba(81, 68, 61, 0.3); display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.room-world-footer p { font-size: 14px; color: #6e5e54; }
+/* Memories garden bed: a soil-and-flower strip under the pressed
+   flowers, so the garden reads as a place at first glance, not a
+   grid. Glyphs only, aria-hidden in markup; sway is transform-only. */
+.garden-bed { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 0 0 14px; padding: 10px 14px; background: #e3ebdd; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: 0 0 20px 20px; font-size: 22px; color: #6b5563; }
+.garden-bed span { animation: flowerSway 5s ease-in-out infinite alternate; }
+.garden-bed span:nth-child(2n) { animation-delay: 1.2s; }
+.garden-bed span:nth-child(3n) { animation-delay: 2.4s; }
+.room-world-memories { background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(81, 68, 61, 0.05) 31px 32px), linear-gradient(to bottom, #e3ebdd 0, #f8f1e7 260px); background-color: #f8f1e7; }
+/* Reminder Room jar: the kind-words jar as a real panel. The draw
+   button runs the existing random-note flow; nothing new is stored. */
+.kind-jar { background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.3); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px rgba(81, 68, 61, 0.10); }
+.keepsake-box-strip { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 4px 0 12px; font-size: 14px; font-weight: 700; color: #6b5563; }
+/* Search drawer world: the drawer cabinet. The fronts row is the
+   cabinet face (three labelled drawers, aria-hidden glyphs only —
+   the labels are room names, never content); the search form sits
+   in a pulled-out drawer panel with a handle bar, and each result
+   is a drawer card. The world background above (powder fading to
+   cream and lilac) is the desk the cabinet stands on, not a tint
+   applied to the old page: the room now uses the full-screen
+   RoomWorld shell, its own header, its own enter animation, its
+   own scroll container and its own footer return, like the other
+   worlds. */
+.search-drawer-fronts { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 4px 0 16px; }
+.search-drawer-front { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 92px; padding: 10px 12px 12px; background: #dfeaf3; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 8px; box-shadow: 0 6px 14px rgba(81, 68, 61, 0.12); font-size: 12px; font-weight: 800; color: #51443d; }
+.search-drawer-front i { font-style: normal; width: 34px; height: 8px; border-radius: 9999px; border: 1.5px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
+.search-drawer { position: relative; background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.35); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px rgba(81, 68, 61, 0.10); overflow: hidden; }
+.search-drawer::before { content: ""; display: block; height: 10px; margin: -16px -16px 14px; background: #dfeaf3; border-bottom: 1.5px solid rgba(81, 68, 61, 0.35); }
+.search-drawer-handle { display: block; width: 64px; height: 10px; margin: 0 auto 14px; border-radius: 9999px; border: 1.5px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
+/* Keepsake Box scene: a fuller box, not a strip. The lid bar (with
+   latch) sits over an interior panel that holds the real summary
+   and the real category compartments — counts and filters derived
+   from the existing keepsakes, nothing invented, nothing stored. */
+.keepsake-box-scene { background: #fffdf8; border: 1.5px solid rgba(81, 68, 61, 0.35); border-radius: 20px; box-shadow: 0 10px 24px rgba(81, 68, 61, 0.10); overflow: hidden; margin-bottom: 16px; }
+.keepsake-box-lid { display: flex; align-items: center; justify-content: center; gap: 10px; background: #d8c6ee; border-bottom: 1.5px solid rgba(81, 68, 61, 0.45); padding: 10px 14px; font-size: 14px; font-weight: 800; color: #51443d; }
+.keepsake-box-lid i { font-style: normal; width: 44px; height: 10px; border-radius: 9999px; border: 1.5px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
+.keepsake-box-interior { padding: 16px; }
+/* Drawer motif for the Search identity strip: a small labelled
+   drawer front with a pull handle, matching the keepsake-box motif
+   language (border, shadow, pastel face). */
+.motif-drawer { width: 58px; height: 46px; flex-shrink: 0; background: #dfeaf3; border: 1.5px solid rgba(81, 68, 61, 0.45); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: var(--shadow-chip); position: relative; }
+.motif-drawer::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: 22px; height: 5px; margin-left: -11px; border-radius: 9999px; border: 1px solid rgba(81, 68, 61, 0.5); background: #f8edc9; }
+/* Memories ambient sway + world-enter reduced-motion kill-switches,
+   in addition to the global * rule above (which already collapses
+   durations). The .reduce-motion class mirrors the Settings toggle. */
+@media (prefers-reduced-motion: reduce) {
+  .world-enter, .world-exiting, .garden-bed span { animation: none !important; }
+}
+.reduce-motion .world-enter, .reduce-motion .world-exiting, .reduce-motion .garden-bed span { animation: none !important; }
