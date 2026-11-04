@@ -359,7 +359,14 @@ body {
    then dvh — later declarations win where supported), so the scene
    fills the screen without a gap or an extra scroll. The gear control
    on Home is translucent at rest and clears on hover/focus. */
-.home-fullscreen { position: relative; width: 100vw; height: 100vh; height: 100svh; height: 100dvh; overflow: hidden; }
+/* No document-level horizontal scrollbar, ever: 100vw elements plus a
+   classic vertical scrollbar, and translated enter animations (the
+   Future world slides in from the side), both used to widen the page
+   by a few pixels. `clip` (not `hidden`) keeps vertical scrolling and
+   sticky headers working. */
+html, body { overflow-x: clip; }
+
+.home-fullscreen { position: relative; width: 100%; height: 100vh; height: 100svh; height: 100dvh; overflow: hidden; }
 .home-gear { background: rgba(255, 253, 248, 0.55); border: 1.5px solid rgba(81, 68, 61, 0.35); color: #51443d; box-shadow: 0 2px 8px rgba(81, 68, 61, 0.2); }
 .home-gear:hover, .home-gear:focus-visible { background: rgba(255, 253, 248, 0.95); }
 
@@ -396,7 +403,7 @@ body {
 /* Bottom navigation: the active pill lifts slightly (so switching rooms
    visibly moves the indicator) and every item presses; the bar itself
    reserves the device safe area below its own padding. */
-.bottom-nav-btn { transition: transform var(--duration-gentle) var(--ease-gentle), background-color var(--duration-gentle) var(--ease-gentle), box-shadow var(--duration-gentle) var(--ease-gentle); }
+.bottom-nav-btn { min-width: 0; transition: transform var(--duration-gentle) var(--ease-gentle), background-color var(--duration-gentle) var(--ease-gentle), box-shadow var(--duration-gentle) var(--ease-gentle); }
 .bottom-nav-btn[aria-current="page"] { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(81, 68, 61, 0.25); }
 .bottom-nav-btn:active { transform: scale(0.94); }
 .bottom-nav-bar { padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
@@ -447,7 +454,7 @@ body {
    token colours / gentle gradients only — no photographs, no external
    assets. All animations here are transform/opacity only and are
    already collapsed by the reduced-motion blocks above. */
-.room-world { width: 100vw; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; color: #51443d; }
+.room-world { width: 100%; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; color: #51443d; }
 .room-world-memories { background: #f8f1e7; background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(81, 68, 61, 0.05) 31px 32px); }
 .room-world-letters { background: linear-gradient(to bottom, #f1e6d3 0, #f8f1e7 320px); }
 .room-world-quiet { background: linear-gradient(to bottom, #e3ebdd 0, #dfeaf3 420px, #f8f1e7 900px); }
@@ -578,6 +585,13 @@ body {
    tokens only: cream #F8F1E7, sage #E3EBDD, rose #F4DFE3, butter
    #F8EDC9, powder #DFEAF3, lilac #EAE1F1, warm brown text #51443d. */
 .room-world { overflow-x: hidden; }
+
+/* Future create form: the washi strip's -26px pull used to straddle
+   the create panel's top edge; inside this section it sits fully
+   inside the panel instead. scroll-margin keeps the form below the
+   sticky world header when "Add a new stop" scrolls it into view. */
+#future-create { scroll-margin-top: 84px; }
+#future-create .ds-create .washi { margin-top: 0; }
 @keyframes worldEnterRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes worldEnterSettle { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes worldEnterFade { from { opacity: 0; } to { opacity: 1; } }

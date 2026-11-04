@@ -96,7 +96,7 @@ export function Toast({ message, kind }: { message: string; kind: 'ok' | 'error'
   if (!message) return null;
   return (
     <div role={kind === 'error' ? 'alert' : 'status'} aria-live="polite"
-      className={`fixed bottom-28 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-note px-4 py-3 text-center text-sm font-semibold shadow-xl ring-1 ${kind === 'error' ? 'bg-rose text-cocoa ring-rose-deep' : 'bg-paper text-cocoa ring-cocoa/20'}`}>
+      className={`pointer-events-none fixed bottom-28 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-note px-4 py-3 text-center text-sm font-semibold shadow-xl ring-1 ${kind === 'error' ? 'bg-rose text-cocoa ring-rose-deep' : 'bg-paper text-cocoa ring-cocoa/20'}`}>
       {message}
     </div>
   );

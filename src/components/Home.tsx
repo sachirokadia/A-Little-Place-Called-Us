@@ -235,11 +235,26 @@ const COTTAGE_TARGETS: CottageTarget[] = [
    arcade centres) out of view the same way — also menu-reachable, and
    reported as a limitation, never faked with a clamped position. */
 type Crop = { scale: number; sx: number; sy: number; vw: number; vh: number; dw: number; dh: number };
-function computeCrop(cw: number, ch: number, nw: number, nh: number, centres: number[]): Crop {
+function computeCrop(cw: number, ch: number, nw: number, nh: number, centres: number[], yCentres: number[]): Crop {
   const scale = Math.max(cw / nw, ch / nh);
   const vw = cw / scale;
   const vh = ch / scale;
-  const sy = vh >= nh ? 0 : 0.42 * (nh - vh);
+  let sy = vh >= nh ? 0 : 0.42 * (nh - vh);
+  // Wide aspects: the 42% vertical rule can push the bottom row of
+  // hotspots (garden, map, arcade sign) below the crop, so the arcade
+  // sign vanishes entirely and bottom buttons are cut off by the
+  // viewport edge. When the crop is tall enough to hold every hotspot
+  // centre with a small margin, nudge sy into that window instead —
+  // at 16/10 the preferred sy already sits inside it, so the approved
+  // plate framing is unchanged there. Guarded to the day image's
+  // coordinates (the night artwork is a different scene).
+  if (vh < nh && yCentres.length > 0) {
+    const minCy = Math.min(...yCentres);
+    const maxCy = Math.max(...yCentres);
+    if (minCy >= 0 && maxCy <= nh && vh >= maxCy - minCy + 24) {
+      sy = Math.min(Math.max(sy, maxCy - vh + 12), minCy - 12);
+    }
+  }
   let sx = 0;
   if (vw < nw) {
     const lo = 0;
@@ -290,15 +305,22 @@ function computeCrop(cw: number, ch: number, nw: number, nh: number, centres: nu
 /* Displayed button box for a source box: the centre maps through the
    crop, and the 44px minimum expands symmetrically around that centre
    (as the old plate did) so the centre never drifts when the minimum
-   bites. */
+   bites. The box is then clamped inside the scene: a centre near the
+   crop edge used to let its button hang below the viewport (bottom
+   row at wide aspects), where it could never be fully seen on a
+   no-scroll homepage. Clamping shifts the button a little, never its
+   centre off its object, and centres outside the crop are still not
+   rendered at all — only rendered buttons are kept fully visible. */
 function placedBox(box: SourceBox, crop: Crop) {
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
   const width = Math.max(box.w * crop.scale, 44);
   const height = Math.max(box.h * crop.scale, 44);
+  const containerW = crop.vw * crop.scale;
+  const containerH = crop.vh * crop.scale;
   return {
-    left: (cx - crop.sx) * crop.scale - width / 2,
-    top: (cy - crop.sy) * crop.scale - height / 2,
+    left: Math.min(Math.max((cx - crop.sx) * crop.scale - width / 2, 0), Math.max(containerW - width, 0)),
+    top: Math.min(Math.max((cy - crop.sy) * crop.scale - height / 2, 0), Math.max(containerH - height, 0)),
     width,
     height,
   };
@@ -365,15 +387,20 @@ export function Home({ store, go, onSwitchViewer }: {
   // Fallbacks are the verified natural sizes (day 1024×1024, night
   // 1200×630); the img onLoad replaces them with the real values.
   const [natural, setNatural] = useState(() => (cottageTheme === 'night' ? { w: 1200, h: 630 } : { w: 1024, h: 1024 }));
+  // Fades the hero in once decoded, over a soft sky-to-garden gradient
+  // so the page never reads as blank cream while the image is in
+  // flight (see the preload link in index.html).
+  const [imgLoaded, setImgLoaded] = useState(false);
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const [crop, setCrop] = useState<Crop | null>(null);
   const centres = COTTAGE_TARGETS.map((t) => t.box.x + t.box.w / 2);
+  const yCentres = COTTAGE_TARGETS.map((t) => t.box.y + t.box.h / 2);
   useLayoutEffect(() => {
     const el = sceneRef.current;
     if (!el) return;
     const measure = () => {
       const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) setCrop(computeCrop(r.width, r.height, natural.w, natural.h, centres));
+      if (r.width > 0 && r.height > 0) setCrop(computeCrop(r.width, r.height, natural.w, natural.h, centres, yCentres));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -431,19 +458,23 @@ export function Home({ store, go, onSwitchViewer }: {
           (flowers from real memories, bunting from real keepsakes, with
           NO accompanying statistics text), its storybook sign, its
           hotspots, and one small settings control. */}
-      <div ref={sceneRef} className="absolute inset-0 overflow-hidden">
+      <div ref={sceneRef} className="absolute inset-0 overflow-hidden" style={{ background: 'linear-gradient(to bottom, #bfe3f2 0%, #eaf3e6 45%, #f8f1e7 75%, #e3ebdd 100%)' }}>
         <img
           src={cottageTheme === 'night' ? '/night-cottage.jpg' : '/day-cottage.jpg'}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
           alt={cottageTheme === 'night'
             ? 'A stone cottage at night, its windows glowing warm, beneath a moonlit garden of ferns, hostas and jasmine'
             : 'A pastel cottage in a sunny garden, with a pink roof, mint walls, a lavender door, flowers, butterflies, and small animals'}
           onLoad={(e) => {
             const im = e.currentTarget;
+            setImgLoaded(true);
             if (im.naturalWidth > 0 && im.naturalHeight > 0) setNatural({ w: im.naturalWidth, h: im.naturalHeight });
           }}
           style={crop
-            ? { position: 'absolute', left: -crop.sx * crop.scale, top: -crop.sy * crop.scale, width: crop.dw, height: crop.dh, maxWidth: 'none' }
-            : { width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 42%' }}
+            ? { position: 'absolute', left: -crop.sx * crop.scale, top: -crop.sy * crop.scale, width: crop.dw, height: crop.dh, maxWidth: 'none', opacity: imgLoaded ? 1 : 0, transition: 'opacity 300ms ease' }
+            : { width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 42%', opacity: imgLoaded ? 1 : 0, transition: 'opacity 300ms ease' }}
         />
         {/* Living world, drawn on the scene (decorative only, never
             interactive, so it can never steal a target's tap): flowers
@@ -468,8 +499,11 @@ export function Home({ store, go, onSwitchViewer }: {
             })}
           </div>
         )}
+        {/* Milestones sit 16px clear of the bottom edge (was 4px), so
+             the strip reads as a card fully inside the viewport,
+             never as a sliver peeking from below the fold. */}
         {(garden.ornaments.length > 0 || garden.milestones.length > 0) && (
-          <div data-testid="garden-strip" aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-1 z-10 flex flex-wrap items-center justify-center gap-1 px-2">
+          <div data-testid="garden-strip" aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex flex-wrap items-center justify-center gap-1 px-2">
             {garden.ornaments.map((o) => (
               <span key={o.sourceId} data-testid="garden-ornament" title={o.label} style={{ fontSize: 17, lineHeight: 1, textShadow: '0 1px 2px rgba(255,253,248,0.9)' }}>{o.glyph}</span>
             ))}
