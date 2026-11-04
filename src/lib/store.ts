@@ -138,6 +138,19 @@ export class PlaceStore {
 
   // ---------- mutations (demo path persists locally; Supabase path below) ----------
   async create<T extends AnyItem>(collection: CollectionName, input: Record<string, unknown>): Promise<T> {
+    // API branch (R0 fix): previously create() had no api branch, so API-mode
+    // creates only entered local state, issued zero POST requests, and vanished
+    // on reload. Post first and use the server row (server id, server-derived
+    // media URL, author from the session), mirroring update().
+    if (this.mode === 'api') {
+      const saved = await apiFetch(`/api/items/${collection}`, { method: 'POST', body: JSON.stringify(input) }) as unknown as AnyItem;
+      const row = saved as unknown as Record<string, unknown>;
+      if (typeof row.mediaUrl === 'string' && row.mediaUrl.startsWith('/')) row.mediaUrl = `${API_URL}${row.mediaUrl}`;
+      if (typeof row.completionPhotoUrl === 'string' && row.completionPhotoUrl.startsWith('/')) row.completionPhotoUrl = `${API_URL}${row.completionPhotoUrl}`;
+      (this.data[collection] as AnyItem[]).unshift(saved as AnyItem);
+      this.version++;
+      return saved as unknown as T;
+    }
     const now = nowIso();
     const item = {
       ...input, id: uid(), createdAt: now, updatedAt: now, deletedAt: null,
@@ -172,6 +185,9 @@ export class PlaceStore {
     }
     if (this.mode === 'api') {
       const saved = await apiFetch(`/api/items/${collection}/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }) as unknown as AnyItem;
+      const r = saved as unknown as Record<string, unknown>;
+      if (typeof r.mediaUrl === 'string' && r.mediaUrl.startsWith('/')) r.mediaUrl = `${API_URL}${r.mediaUrl}`;
+      if (typeof r.completionPhotoUrl === 'string' && r.completionPhotoUrl.startsWith('/')) r.completionPhotoUrl = `${API_URL}${r.completionPhotoUrl}`;
       Object.assign(item, saved);
       this.version++;
       return; // API mode never writes to the demo localStorage key.
@@ -190,6 +206,9 @@ export class PlaceStore {
   async restore(collection: CollectionName, id: string): Promise<void> {
     if (this.mode === 'api') {
       const saved = await apiFetch(`/api/items/${collection}/${id}/restore`, { method: 'POST' }) as unknown as AnyItem;
+      const r = saved as unknown as Record<string, unknown>;
+      if (typeof r.mediaUrl === 'string' && r.mediaUrl.startsWith('/')) r.mediaUrl = `${API_URL}${r.mediaUrl}`;
+      if (typeof r.completionPhotoUrl === 'string' && r.completionPhotoUrl.startsWith('/')) r.completionPhotoUrl = `${API_URL}${r.completionPhotoUrl}`;
       const item = (this.data[collection] as AnyItem[]).find((i) => i.id === id);
       if (item) Object.assign(item, saved);
       this.version++;
@@ -269,6 +288,17 @@ export class PlaceStore {
     };
     this.viewerId = data.viewer.id;
     this.viewerName = data.viewer.displayName || 'You';
+    // R4 fix: the server returns media URLs as /api/media/... paths. In a split
+    // deployment (frontend on one origin, API on another) a bare path resolves
+    // against the frontend origin and 404s after reload. Prefix with API_URL,
+    // mirroring uploadMedia(). Same-origin API mode is unaffected (API_URL is
+    // the origin the paths were issued for).
+    const prefixMedia = (items: AnyItem[]) => items.forEach((i) => {
+      const r = i as unknown as Record<string, unknown>;
+      if (typeof r.mediaUrl === 'string' && r.mediaUrl.startsWith('/')) r.mediaUrl = `${API_URL}${r.mediaUrl}`;
+      if (typeof r.completionPhotoUrl === 'string' && r.completionPhotoUrl.startsWith('/')) r.completionPhotoUrl = `${API_URL}${r.completionPhotoUrl}`;
+    });
+    prefixMedia(this.data.memories); prefixMedia(this.data.voiceNotes); prefixMedia(this.data.plans);
     this.version++;
     return true;
   }

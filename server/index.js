@@ -54,9 +54,17 @@ const pool = new Pool({
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
-app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) : true,
-}));
+// R1 fix: previously CORS reflected ANY origin when CORS_ORIGIN was unset.
+// Now: an explicit CORS_ORIGIN list wins; without one, production fails
+// closed (no cross-origin access at all) and non-production keeps the old
+// local-development behaviour. Never reflect an arbitrary origin in prod.
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
+  : (process.env.NODE_ENV === 'production' ? false : true);
+if (!process.env.CORS_ORIGIN && process.env.NODE_ENV === 'production') {
+  console.warn('CORS_ORIGIN is not set in production: cross-origin requests are refused (fail closed).');
+}
+app.use(cors({ origin: corsOrigin }));
 
 // ---------- schema (idempotent; same file as postgres/schema.sql) ----------
 async function ensureSchema() {
@@ -578,7 +586,12 @@ app.post('/api/games/rounds/:id/guess', auth, async (req, res) => {
 let boardEnginePromise = null;
 async function loadBoardEngine() {
   if (!boardEnginePromise) {
-    boardEnginePromise = import('../src/lib/boardGame.ts').catch((e) => {
+    // R3 fix: local layout imports ../src/lib/boardGame.ts (server/ is a
+    // sibling of src/); the Docker image copies boardGame.ts next to
+    // index.js (see server/Dockerfile), so fall back to ./boardGame.ts.
+    // boardGame.ts has no imports of its own, so the single-file copy is
+    // complete. If both fail, reset and rethrow (never cache a failure).
+    boardEnginePromise = import('../src/lib/boardGame.ts').catch(() => import('./boardGame.ts')).catch((e) => {
       boardEnginePromise = null;
       throw e;
     });
