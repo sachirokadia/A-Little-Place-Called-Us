@@ -305,6 +305,13 @@ export default function App() {
     );
   }
 
+  // TEMPORARY LIVE DEMO (2026-11-04, revert when VITE_API_URL is set on the live
+  // project): the live deployment deliberately shows the new app in demo/sample mode
+  // so visitors see the new app instead of the setup screen. Demo content is generic
+  // samples saved on this device only and never syncs; the fixed badge below says so
+  // on every route, including the fullscreen cottage and room worlds. Revert by
+  // setting TEMPORARY_LIVE_DEMO back to false — the fail-safe gate below then applies.
+  const TEMPORARY_LIVE_DEMO = true;
   // Production misconfiguration gate: a production build with neither backend configured
   // (or with a non-HTTPS backend URL, which the config flags treat as unconfigured) must
   // NOT fall through to demo mode. Demo mode looks like a working shared home while saving
@@ -312,7 +319,7 @@ export default function App() {
   // real private content. Fail safe with a clear message instead. Local development
   // (import.meta.env.DEV) still allows demo mode, and a correctly configured production
   // build never reaches this screen.
-  if (import.meta.env.PROD && !apiConfigured && !supabaseConfigured) {
+  if (import.meta.env.PROD && !apiConfigured && !supabaseConfigured && !TEMPORARY_LIVE_DEMO) {
     return (
       <main className="mx-auto w-full max-w-md px-4 py-16">
         <p className="text-xs uppercase tracking-[0.25em] text-plum">A quiet place, kept for two</p>
@@ -378,9 +385,14 @@ export default function App() {
           You are offline — saved things on this device are still here, but nothing new can sync to your partner until you are back online.
         </div>
       )}
+      {import.meta.env.PROD && store.mode === 'demo' && (
+        <div role="status" className="fixed left-1/2 top-2 z-[70] -translate-x-1/2 rounded-full bg-rose px-3 py-1 text-center text-xs font-bold text-cocoa ring-1 ring-inset ring-rose-deep">
+          Temporary sample mode — saved on this device only, not shared yet
+        </div>
+      )}
       {store.mode === 'demo' && !isCottageHome && !isRoomWorld && (
         <div role="status" className="bg-butter px-4 py-2 text-center text-xs leading-relaxed text-cocoa ring-1 ring-inset ring-cocoa/20">
-          Demo mode — sample content, saved on this device only. Connect Supabase (see README) to sync privately across devices. You are viewing as <strong>{viewerLabel}</strong>.
+          {import.meta.env.PROD ? 'Temporary sample mode — sample content, saved on this device only. Shared sync is not connected yet; nothing here reaches your partner.' : 'Demo mode — sample content, saved on this device only. Connect Supabase (see README) to sync privately across devices.'} You are viewing as <strong>{viewerLabel}</strong>.
           <button className="ml-2 inline-flex min-h-11 items-center px-1 underline" onClick={switchViewer}>Switch to {store.viewerId === 'demo-you' ? 'Partner' : 'You'}</button>
         </div>
       )}
